@@ -35,3 +35,12 @@ escrito em código. Tudo vem de `ConfiguracaoPeladaEntity`.
 - `npm run banco:subir`     — sobe o PostgreSQL no Docker
 - `npm run migracao:gerar -- src/banco/migracoes/NomeDaMigracao`
 - `npm run migracao:rodar`  — aplica migrações pendentes
+
+## Primeiro administrador
+
+O endpoint publico de cadastro sempre cria ORGANIZADOR. Para promover a primeira conta:
+
+    docker exec -it pelada-postgres psql -U pelada -d gerenciador_pelada \
+      -c "UPDATE usuarios SET perfil = 'ADMINISTRADOR' WHERE email = 'seu@email.com';"
+
+A partir dai, esse usuario promove os demais por PATCH /api/usuarios/:id.

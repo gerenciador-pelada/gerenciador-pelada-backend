@@ -5,6 +5,7 @@ import { AutenticacaoModule } from './modulos/autenticacao/autenticacao.module';
 import { JogadoresModule } from './modulos/jogadores/jogadores.module';
 import { LocaisModule } from './modulos/locais/locais.module';
 import { TemporadasModule } from './modulos/temporadas/temporadas.module';
+import { UsuariosModule } from './modulos/usuarios/usuarios.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { TemporadasModule } from './modulos/temporadas/temporadas.module';
     JogadoresModule,
     LocaisModule,
     TemporadasModule,
+    UsuariosModule,
   ],
 })
 export class AppModule {}
