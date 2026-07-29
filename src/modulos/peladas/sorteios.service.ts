@@ -1,13 +1,20 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { FilaJogadorEntity } from '../../banco/entidades/fila-jogador.entity';
+import { JogadorTimeEntity } from '../../banco/entidades/jogador-time.entity';
 import { ParticipantePeladaEntity } from '../../banco/entidades/participante-pelada.entity';
+import { PartidaEntity } from '../../banco/entidades/partida.entity';
 import { PeladaEntity } from '../../banco/entidades/pelada.entity';
+import { TimeEntity } from '../../banco/entidades/time.entity';
 import { StatusParticipantePelada } from '../../comum/enums/status-participante-pelada.enum';
+import { StatusPartida } from '../../comum/enums/status-partida.enum';
 import { StatusPelada } from '../../comum/enums/status-pelada.enum';
 import { ErroRegraPelada } from '../../dominio/erros/erro-regra-pelada';
-import { SorteadorAleatorio } from '../../dominio/pelada/sorteador-aleatorio';
+import {
+  JogadorSorteio,
+  SorteadorAleatorio,
+} from '../../dominio/pelada/sorteador-aleatorio';
 
 @Injectable()
 export class SorteiosService {
@@ -16,9 +23,19 @@ export class SorteiosService {
     private readonly peladas: Repository<PeladaEntity>,
     @InjectRepository(ParticipantePeladaEntity)
     private readonly participantes: Repository<ParticipantePeladaEntity>,
-    @InjectRepository(FilaJogadorEntity)
-    private readonly fila: Repository<FilaJogadorEntity>,
+    private readonly fonteDados: DataSource,
   ) {}
+
+  /**
+   * Sorteia os dois primeiros times e cria a partida inicial.
+   *
+   * Tudo roda numa transacao unica: se a criacao da partida falhar, os times e
+   * a fila nao ficam gravados pela metade. Antes desta versao o resultado do
+   * sorteio existia apenas na resposta HTTP e os times se perdiam.
+   *
+   * Refazer o sorteio e permitido enquanto a partida 1 estiver AGUARDANDO: os
+   * times e a partida anteriores sao descartados e o sorteio roda de novo.
+   */
   async sortear(usuarioId: string, peladaId: string) {
     const pelada = await this.peladas.findOne({
       where: { id: peladaId, organizadorId: usuarioId },
@@ -30,9 +47,11 @@ export class SorteiosService {
         'SORTEIO_STATUS_INVALIDO',
         'A pelada precisa estar em andamento',
       );
+
     const presentes = await this.participantes.find({
       where: { peladaId, status: StatusParticipantePelada.PRESENTE },
     });
+
     const resultado = new SorteadorAleatorio().sortear(
       presentes.map((p) => ({
         id: p.id,
@@ -41,19 +60,119 @@ export class SorteiosService {
       })),
       pelada.configuracao.jogadoresLinhaPorTime,
     );
-    await this.fila.delete({ peladaId });
-    if (resultado.fila.length)
-      await this.fila.save(
-        resultado.fila.map((p, i) =>
-          this.fila.create({
-            peladaId,
-            participanteId: p.id,
-            posicao: i + 1,
-            ativo: true,
-            saiuEm: null,
-          }),
-        ),
+
+    return this.fonteDados.transaction(async (gerenciador) => {
+      const partidasExistentes = await gerenciador.find(PartidaEntity, {
+        where: { peladaId },
+      });
+      const emAndamento = partidasExistentes.find(
+        (p) => p.status !== StatusPartida.AGUARDANDO,
       );
-    return resultado;
+      if (emAndamento) {
+        throw new ErroRegraPelada(
+          'SORTEIO_PARTIDA_JA_INICIADA',
+          'Nao e possivel sortear: a pelada ja tem partida iniciada',
+        );
+      }
+
+      await gerenciador.delete(PartidaEntity, { peladaId });
+      const timesAnteriores = await gerenciador.find(TimeEntity, {
+        where: { peladaId },
+      });
+      if (timesAnteriores.length) {
+        await gerenciador.delete(
+          JogadorTimeEntity,
+          timesAnteriores.map((t) => t.id),
+        );
+        await gerenciador.delete(TimeEntity, { peladaId });
+      }
+      await gerenciador.delete(FilaJogadorEntity, { peladaId });
+
+      const timeCasa = await this.criarTime(
+        gerenciador,
+        peladaId,
+        'Time A',
+        '#2457D6',
+        1,
+        resultado.timeA,
+      );
+      const timeVisitante = await this.criarTime(
+        gerenciador,
+        peladaId,
+        'Time B',
+        '#147D45',
+        2,
+        resultado.timeB,
+      );
+
+      if (resultado.fila.length) {
+        await gerenciador.save(
+          resultado.fila.map((p, i) =>
+            gerenciador.create(FilaJogadorEntity, {
+              peladaId,
+              participanteId: p.id,
+              posicao: i + 1,
+              ativo: true,
+              saiuEm: null,
+            }),
+          ),
+        );
+      }
+
+      const partida = await gerenciador.save(
+        gerenciador.create(PartidaEntity, {
+          peladaId,
+          numero: 1,
+          timeCasaId: timeCasa.id,
+          timeVisitanteId: timeVisitante.id,
+          status: StatusPartida.AGUARDANDO,
+        }),
+      );
+
+      return { partida, timeCasa, timeVisitante, fila: resultado.fila };
+    });
+  }
+
+  private async criarTime(
+    gerenciador: EntityManager,
+    peladaId: string,
+    nome: string,
+    cor: string,
+    ordemCriacao: number,
+    lado: { linha: JogadorSorteio[]; goleiro?: JogadorSorteio },
+  ): Promise<TimeEntity> {
+    const time = await gerenciador.save(
+      gerenciador.create(TimeEntity, {
+        peladaId,
+        nome,
+        cor,
+        ordemCriacao,
+        partidasConsecutivas: 0,
+        vitoriasConsecutivas: 0,
+        ativo: true,
+        dissolvidoEm: null,
+      }),
+    );
+
+    const elenco = [
+      ...lado.linha.map((j) => ({ participanteId: j.id, ehGoleiro: false })),
+      ...(lado.goleiro
+        ? [{ participanteId: lado.goleiro.id, ehGoleiro: true }]
+        : []),
+    ];
+
+    await gerenciador.save(
+      elenco.map((e) =>
+        gerenciador.create(JogadorTimeEntity, {
+          timeId: time.id,
+          participanteId: e.participanteId,
+          ehGoleiro: e.ehGoleiro,
+          ativo: true,
+          saiuEm: null,
+        }),
+      ),
+    );
+
+    return time;
   }
 }

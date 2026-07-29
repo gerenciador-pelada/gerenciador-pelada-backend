@@ -33,6 +33,8 @@ import { EventosPartidaService } from './eventos-partida.service';
 import { RankingsService } from './rankings.service';
 import { HistoricoService } from './historico.service';
 import { RegistrarEventoPartidaDto } from './dto/registrar-evento-partida.dto';
+import { FinalizarPartidaDto } from './dto/finalizar-partida.dto';
+import { PainelService } from './painel.service';
 
 @ApiTags('Peladas')
 @ApiBearerAuth()
@@ -47,7 +49,17 @@ export class PeladasController {
     private readonly eventos: EventosPartidaService,
     private readonly rankings: RankingsService,
     private readonly historico: HistoricoService,
+    private readonly painel: PainelService,
   ) {}
+
+  @Get(':id/painel')
+  @ApiOperation({ summary: 'Estado completo da tela principal da pelada' })
+  buscarPainel(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.painel.montar(u.id, id);
+  }
 
   @Post()
   @ApiOperation({ summary: 'Cria uma pelada com a configuracao padrao' })
@@ -75,8 +87,9 @@ export class PeladasController {
   @Post('/partidas/:partidaId/finalizar') finalizarPartida(
     @UsuarioAtual() u: UsuarioRequisicao,
     @Param('partidaId', ParseUUIDPipe) id: string,
+    @Body() dto: FinalizarPartidaDto,
   ) {
-    return this.partidas.finalizar(u.id, id);
+    return this.partidas.finalizar(u.id, id, dto);
   }
   @Post('/partidas/:partidaId/cancelar') cancelarPartida(
     @UsuarioAtual() u: UsuarioRequisicao,

@@ -22,6 +22,9 @@ import { RankingsService } from './rankings.service';
 import { HistoricoAcaoEntity } from '../../banco/entidades/historico-acao.entity';
 import { HistoricoService } from './historico.service';
 import { AcessoPeladaService } from './acesso-pelada.service';
+import { TimeEntity } from '../../banco/entidades/time.entity';
+import { JogadorTimeEntity } from '../../banco/entidades/jogador-time.entity';
+import { PainelService } from './painel.service';
 
 @Module({
   imports: [
@@ -38,6 +41,8 @@ import { AcessoPeladaService } from './acesso-pelada.service';
       EventoPartidaEntity,
       PontuacaoJogadorEntity,
       HistoricoAcaoEntity,
+      TimeEntity,
+      JogadorTimeEntity,
     ]),
   ],
   controllers: [PeladasController],
@@ -51,6 +56,7 @@ import { AcessoPeladaService } from './acesso-pelada.service';
     EventosPartidaService,
     RankingsService,
     HistoricoService,
+    PainelService,
   ],
   exports: [PeladasService, ConfiguracoesService],
 })

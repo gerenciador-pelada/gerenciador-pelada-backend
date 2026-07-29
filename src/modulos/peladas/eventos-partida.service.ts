@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { EventoPartidaEntity } from '../../banco/entidades/evento-partida.entity';
 import { ParticipacaoPartidaEntity } from '../../banco/entidades/participacao-partida.entity';
 import { PartidaEntity } from '../../banco/entidades/partida.entity';
+import { PeladaEntity } from '../../banco/entidades/pelada.entity';
 import { TipoEventoPartida } from '../../comum/enums/tipo-evento-partida.enum';
 import { ErroRegraPelada } from '../../dominio/erros/erro-regra-pelada';
 @Injectable()
@@ -27,7 +28,14 @@ export class EventosPartidaService {
       minuto?: number;
     },
   ) {
-    const partida = await this.partidas.findOne({ where: { id: partidaId } });
+    // A posse entra no WHERE: partida inexistente e partida de outro
+    // organizador respondem o mesmo 404, sem revelar quais ids existem.
+    const partida = await this.partidas
+      .createQueryBuilder('partida')
+      .innerJoin(PeladaEntity, 'pelada', 'pelada.id = partida.peladaId')
+      .where('partida.id = :partidaId', { partidaId })
+      .andWhere('pelada.organizadorId = :usuarioId', { usuarioId })
+      .getOne();
     if (!partida) throw new NotFoundException('Partida nao encontrada');
     const p = await this.participacoes.findOne({
       where: { partidaId, participanteId: dto.participanteId },
