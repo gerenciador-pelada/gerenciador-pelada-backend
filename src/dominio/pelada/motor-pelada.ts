@@ -9,6 +9,7 @@ export interface TimeRotacao {
   id: string;
   jogadores: JogadorRotacao[];
   partidasConsecutivas: number;
+  vitoriasConsecutivas?: number;
 }
 export interface ResultadoRotacao {
   permanece: TimeRotacao;
@@ -46,14 +47,21 @@ export class MotorPelada {
     casa: TimeRotacao,
     visitante: TimeRotacao,
     vencedorDecisao?: 'CASA' | 'VISITANTE',
+    escolhaAdmin?: 'CASA' | 'VISITANTE',
   ): TimeRotacao[] {
     if (regra === RegraEmpate.AMBOS_SAEM) return [casa, visitante];
-    if (regra === RegraEmpate.MAIS_TEMPO_EM_CAMPO_SAI)
-      return [
-        casa.partidasConsecutivas >= visitante.partidasConsecutivas
-          ? casa
-          : visitante,
-      ];
+    if (regra === RegraEmpate.MAIS_TEMPO_EM_CAMPO_SAI) {
+      if ((casa.vitoriasConsecutivas ?? 0) >= 2) return [casa];
+      if ((visitante.vitoriasConsecutivas ?? 0) >= 2) return [visitante];
+      if ((casa.vitoriasConsecutivas ?? 0) === 1) return [visitante];
+      if ((visitante.vitoriasConsecutivas ?? 0) === 1) return [casa];
+      if (!escolhaAdmin)
+        throw new ErroRegraPelada(
+          'ESCOLHA_ADMIN_OBRIGATORIA',
+          'Administrador deve escolher quem sai',
+        );
+      return [escolhaAdmin === 'CASA' ? casa : visitante];
+    }
     if (!vencedorDecisao)
       throw new ErroRegraPelada(
         'VENCEDOR_DECISAO_OBRIGATORIO',

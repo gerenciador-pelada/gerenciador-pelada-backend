@@ -11,12 +11,48 @@ describe('MotorPelada', () => {
     );
     expect(r.proximo.map((x) => x.id)).toEqual(['f', 'b1']);
   });
-  it('faz casa sair no empate de tempo', () =>
+  it('faz sair time com duas vitorias consecutivas no empate', () =>
     expect(
       MotorPelada.empate(
         RegraEmpate.MAIS_TEMPO_EM_CAMPO_SAI,
-        { id: 'casa', jogadores: [], partidasConsecutivas: 2 },
-        { id: 'v', jogadores: [], partidasConsecutivas: 2 },
+        {
+          id: 'casa',
+          jogadores: [],
+          partidasConsecutivas: 2,
+          vitoriasConsecutivas: 2,
+        },
+        {
+          id: 'v',
+          jogadores: [],
+          partidasConsecutivas: 2,
+          vitoriasConsecutivas: 0,
+        },
       )[0].id,
     ).toBe('casa'));
+  it('mantem time com uma vitoria e pede escolha sem vencedor anterior', () => {
+    expect(
+      MotorPelada.empate(
+        RegraEmpate.MAIS_TEMPO_EM_CAMPO_SAI,
+        {
+          id: 'c',
+          jogadores: [],
+          partidasConsecutivas: 1,
+          vitoriasConsecutivas: 1,
+        },
+        {
+          id: 'v',
+          jogadores: [],
+          partidasConsecutivas: 1,
+          vitoriasConsecutivas: 0,
+        },
+      )[0].id,
+    ).toBe('v');
+    expect(() =>
+      MotorPelada.empate(
+        RegraEmpate.MAIS_TEMPO_EM_CAMPO_SAI,
+        { id: 'c', jogadores: [], partidasConsecutivas: 0 },
+        { id: 'v', jogadores: [], partidasConsecutivas: 0 },
+      ),
+    ).toThrow('Administrador deve escolher');
+  });
 });
