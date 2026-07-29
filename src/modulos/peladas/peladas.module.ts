@@ -17,6 +17,8 @@ import { ParticipacaoPartidaEntity } from '../../banco/entidades/participacao-pa
 import { EventoPartidaEntity } from '../../banco/entidades/evento-partida.entity';
 import { PartidasService } from './partidas.service';
 import { EventosPartidaService } from './eventos-partida.service';
+import { PontuacaoJogadorEntity } from '../../banco/entidades/pontuacao-jogador.entity';
+import { RankingsService } from './rankings.service';
 
 @Module({
   imports: [
@@ -31,6 +33,7 @@ import { EventosPartidaService } from './eventos-partida.service';
       PartidaEntity,
       ParticipacaoPartidaEntity,
       EventoPartidaEntity,
+      PontuacaoJogadorEntity,
     ]),
   ],
   controllers: [PeladasController],
@@ -41,6 +44,7 @@ import { EventosPartidaService } from './eventos-partida.service';
     SorteiosService,
     PartidasService,
     EventosPartidaService,
+    RankingsService,
   ],
   exports: [PeladasService, ConfiguracoesService],
 })

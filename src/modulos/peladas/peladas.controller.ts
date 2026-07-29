@@ -30,6 +30,7 @@ import { ReordenarChegadaDto } from './dto/reordenar-chegada.dto';
 import { SorteiosService } from './sorteios.service';
 import { PartidasService } from './partidas.service';
 import { EventosPartidaService } from './eventos-partida.service';
+import { RankingsService } from './rankings.service';
 import { RegistrarEventoPartidaDto } from './dto/registrar-evento-partida.dto';
 
 @ApiTags('Peladas')
@@ -43,6 +44,7 @@ export class PeladasController {
     private readonly sorteios: SorteiosService,
     private readonly partidas: PartidasService,
     private readonly eventos: EventosPartidaService,
+    private readonly rankings: RankingsService,
   ) {}
 
   @Post()
@@ -113,6 +115,10 @@ export class PeladasController {
     @Query() filtro: FiltrarPeladasDto,
   ) {
     return this.peladas.listar(usuario.id, filtro);
+  }
+
+  @Get('/rankings') listarRankings(@Query('peladaId') peladaId?: string) {
+    return this.rankings.listar(peladaId);
   }
 
   @Get(':id')
