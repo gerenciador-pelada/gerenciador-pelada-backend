@@ -1,11 +1,12 @@
 import { NotFoundException } from '@nestjs/common';
+import { TipoEventoPartida } from '../../comum/enums/tipo-evento-partida.enum';
 import { AcessoPeladaService } from './acesso-pelada.service';
 import { RankingsService } from './rankings.service';
 
 const DONO = 'usuario-1';
 const INTRUSO = 'usuario-2';
 
-function criarConstrutor() {
+function criarConstrutor(resultado: unknown[]) {
   const construtor = {
     innerJoin: jest.fn().mockReturnThis(),
     select: jest.fn().mockReturnThis(),
@@ -13,8 +14,9 @@ function criarConstrutor() {
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
     groupBy: jest.fn().mockReturnThis(),
+    addGroupBy: jest.fn().mockReturnThis(),
     orderBy: jest.fn().mockReturnThis(),
-    getRawMany: jest.fn().mockResolvedValue([]),
+    getRawMany: jest.fn().mockResolvedValue(resultado),
   };
   return construtor;
 }
@@ -33,49 +35,98 @@ function criarAcesso(peladaEhDoUsuario: boolean): AcessoPeladaService {
 
 describe('RankingsService', () => {
   it('restringe a agregacao as peladas do organizador', async () => {
-    const construtor = criarConstrutor();
+    const pontuacao = criarConstrutor([]);
     const servico = new RankingsService(
-      { createQueryBuilder: () => construtor } as never,
+      { createQueryBuilder: () => pontuacao } as never,
+      { createQueryBuilder: () => criarConstrutor([]) } as never,
       criarAcesso(true),
     );
 
     await servico.listar(DONO);
 
-    expect(construtor.innerJoin).toHaveBeenCalledWith(
-      expect.anything(),
-      'pelada',
-      'pelada.id = p.peladaId',
-    );
-    expect(construtor.where).toHaveBeenCalledWith(
+    expect(pontuacao.where).toHaveBeenCalledWith(
       'pelada.organizadorId = :usuarioId',
       { usuarioId: DONO },
     );
   });
 
   it('recusa ranking de pelada de outro organizador', async () => {
-    const construtor = criarConstrutor();
+    const pontuacao = criarConstrutor([]);
     const servico = new RankingsService(
-      { createQueryBuilder: () => construtor } as never,
+      { createQueryBuilder: () => pontuacao } as never,
+      { createQueryBuilder: () => criarConstrutor([]) } as never,
       criarAcesso(false),
     );
 
     await expect(servico.listar(INTRUSO, 'pelada-1')).rejects.toBeInstanceOf(
       NotFoundException,
     );
-    expect(construtor.getRawMany).not.toHaveBeenCalled();
+    expect(pontuacao.getRawMany).not.toHaveBeenCalled();
   });
 
-  it('filtra por pelada quando o id e informado', async () => {
-    const construtor = criarConstrutor();
+  it('conta gols pelos eventos, nao pela pontuacao', async () => {
+    // Pelada que nao pontua gol: pontosGol = 0, entao a pontuacao nada diz
+    // sobre quantos gols o jogador fez. A contagem precisa vir dos eventos.
+    const pontuacao = criarConstrutor([
+      {
+        jogadorId: 'j1',
+        nome: 'Ronaldo',
+        apelido: null,
+        pontuacao: '3',
+        partidas: '1',
+      },
+    ]);
+    let chamada = 0;
+    const eventos = {
+      createQueryBuilder: () => {
+        chamada += 1;
+        return chamada === 1
+          ? criarConstrutor([
+              {
+                jogadorId: 'j1',
+                tipo: TipoEventoPartida.GOL,
+                total: '2',
+              },
+              {
+                jogadorId: 'j1',
+                tipo: TipoEventoPartida.BOLA_CHEIA,
+                total: '1',
+              },
+            ])
+          : criarConstrutor([{ jogadorId: 'j1', total: '4' }]);
+      },
+    };
+
     const servico = new RankingsService(
-      { createQueryBuilder: () => construtor } as never,
+      { createQueryBuilder: () => pontuacao } as never,
+      eventos as never,
       criarAcesso(true),
     );
 
-    await servico.listar(DONO, 'pelada-1');
+    const [linha] = await servico.listar(DONO);
 
-    expect(construtor.andWhere).toHaveBeenCalledWith('p.peladaId = :peladaId', {
-      peladaId: 'pelada-1',
-    });
+    expect(linha).toEqual(
+      expect.objectContaining({
+        nome: 'Ronaldo',
+        pontuacao: 3,
+        partidas: 1,
+        gols: 2,
+        assistencias: 4,
+        bolasCheias: 1,
+        bolasMurchas: 0,
+      }),
+    );
+  });
+
+  it('devolve lista vazia sem consultar eventos quando ninguem pontuou', async () => {
+    const eventos = { createQueryBuilder: jest.fn() };
+    const servico = new RankingsService(
+      { createQueryBuilder: () => criarConstrutor([]) } as never,
+      eventos as never,
+      criarAcesso(true),
+    );
+
+    await expect(servico.listar(DONO)).resolves.toEqual([]);
+    expect(eventos.createQueryBuilder).not.toHaveBeenCalled();
   });
 });
