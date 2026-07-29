@@ -58,6 +58,8 @@ export class EventosPartidaService {
     const e = await this.eventos.save(
       this.eventos.create({
         ...dto,
+        // partidaId vem da URL, nao do corpo: sem esta linha a coluna ia nula
+        partidaId,
         participanteRelacionadoId: dto.participanteRelacionadoId ?? null,
         registradoPorId: usuarioId,
       }),
