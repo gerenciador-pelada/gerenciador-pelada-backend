@@ -17,5 +17,21 @@ services:
       timeout: 5s
       retries: 10
 
+  banco-teste:
+    image: postgres:16-alpine
+    container_name: pelada-postgres-teste
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pelada
+      POSTGRES_PASSWORD: pelada
+      POSTGRES_DB: gerenciador_pelada_teste
+    ports:
+      - '5433:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U pelada -d gerenciador_pelada_teste']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
 volumes:
   dados-pelada:
