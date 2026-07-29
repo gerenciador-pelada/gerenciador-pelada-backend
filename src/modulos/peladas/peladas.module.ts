@@ -6,6 +6,8 @@ import { PeladaEntity } from '../../banco/entidades/pelada.entity';
 import { JogadorEntity } from '../../banco/entidades/jogador.entity';
 import { ParticipantePeladaEntity } from '../../banco/entidades/participante-pelada.entity';
 import { ParticipantesService } from './participantes.service';
+import { FilaJogadorEntity } from '../../banco/entidades/fila-jogador.entity';
+import { SorteiosService } from './sorteios.service';
 import { TemporadaEntity } from '../../banco/entidades/temporada.entity';
 import { ConfiguracoesService } from './configuracoes.service';
 import { PeladasController } from './peladas.controller';
@@ -20,10 +22,16 @@ import { PeladasService } from './peladas.service';
       TemporadaEntity,
       JogadorEntity,
       ParticipantePeladaEntity,
+      FilaJogadorEntity,
     ]),
   ],
   controllers: [PeladasController],
-  providers: [PeladasService, ConfiguracoesService, ParticipantesService],
+  providers: [
+    PeladasService,
+    ConfiguracoesService,
+    ParticipantesService,
+    SorteiosService,
+  ],
   exports: [PeladasService, ConfiguracoesService],
 })
 export class PeladasModule {}

@@ -27,6 +27,7 @@ import { ParticipantesService } from './participantes.service';
 import { AdicionarParticipanteDto } from './dto/adicionar-participante.dto';
 import { AlterarStatusParticipanteDto } from './dto/alterar-status-participante.dto';
 import { ReordenarChegadaDto } from './dto/reordenar-chegada.dto';
+import { SorteiosService } from './sorteios.service';
 
 @ApiTags('Peladas')
 @ApiBearerAuth()
@@ -36,6 +37,7 @@ export class PeladasController {
     private readonly peladas: PeladasService,
     private readonly configuracoes: ConfiguracoesService,
     private readonly participantes: ParticipantesService,
+    private readonly sorteios: SorteiosService,
   ) {}
 
   @Post()
@@ -45,6 +47,14 @@ export class PeladasController {
     @Body() dto: CriarPeladaDto,
   ) {
     return this.peladas.criar(usuario.id, dto);
+  }
+
+  @Post(':id/sorteio')
+  sortear(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.sorteios.sortear(u.id, id);
   }
 
   @Post(':id/participantes') adicionarParticipante(
