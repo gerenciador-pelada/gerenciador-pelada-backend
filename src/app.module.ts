@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { BancoModule } from './banco/banco.module';
 import { AutenticacaoModule } from './modulos/autenticacao/autenticacao.module';
 import { JogadoresModule } from './modulos/jogadores/jogadores.module';
+import { LocaisModule } from './modulos/locais/locais.module';
 
 @Module({
   imports: [
@@ -10,6 +11,7 @@ import { JogadoresModule } from './modulos/jogadores/jogadores.module';
     BancoModule,
     AutenticacaoModule,
     JogadoresModule,
+    LocaisModule,
   ],
 })
 export class AppModule {}
