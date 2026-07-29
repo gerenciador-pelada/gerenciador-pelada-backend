@@ -28,6 +28,9 @@ import { AdicionarParticipanteDto } from './dto/adicionar-participante.dto';
 import { AlterarStatusParticipanteDto } from './dto/alterar-status-participante.dto';
 import { ReordenarChegadaDto } from './dto/reordenar-chegada.dto';
 import { SorteiosService } from './sorteios.service';
+import { PartidasService } from './partidas.service';
+import { EventosPartidaService } from './eventos-partida.service';
+import { RegistrarEventoPartidaDto } from './dto/registrar-evento-partida.dto';
 
 @ApiTags('Peladas')
 @ApiBearerAuth()
@@ -38,6 +41,8 @@ export class PeladasController {
     private readonly configuracoes: ConfiguracoesService,
     private readonly participantes: ParticipantesService,
     private readonly sorteios: SorteiosService,
+    private readonly partidas: PartidasService,
+    private readonly eventos: EventosPartidaService,
   ) {}
 
   @Post()
@@ -55,6 +60,29 @@ export class PeladasController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.sorteios.sortear(u.id, id);
+  }
+
+  @Post('/partidas/:partidaId/iniciar') iniciarPartida(
+    @Param('partidaId', ParseUUIDPipe) id: string,
+  ) {
+    return this.partidas.iniciar(id);
+  }
+  @Post('/partidas/:partidaId/finalizar') finalizarPartida(
+    @Param('partidaId', ParseUUIDPipe) id: string,
+  ) {
+    return this.partidas.finalizar(id);
+  }
+  @Post('/partidas/:partidaId/cancelar') cancelarPartida(
+    @Param('partidaId', ParseUUIDPipe) id: string,
+  ) {
+    return this.partidas.cancelar(id);
+  }
+  @Post('/partidas/:partidaId/eventos') registrarEvento(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('partidaId', ParseUUIDPipe) id: string,
+    @Body() dto: RegistrarEventoPartidaDto,
+  ) {
+    return this.eventos.registrar(u.id, id, dto);
   }
 
   @Post(':id/participantes') adicionarParticipante(

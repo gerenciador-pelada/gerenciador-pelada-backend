@@ -18,6 +18,8 @@ describe('PeladasController', () => {
     configuracoes as never,
     {} as never,
     {} as never,
+    {} as never,
+    {} as never,
   );
 
   beforeEach(() => jest.resetAllMocks());

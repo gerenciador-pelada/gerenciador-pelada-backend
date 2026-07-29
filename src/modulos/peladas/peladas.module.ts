@@ -12,6 +12,11 @@ import { TemporadaEntity } from '../../banco/entidades/temporada.entity';
 import { ConfiguracoesService } from './configuracoes.service';
 import { PeladasController } from './peladas.controller';
 import { PeladasService } from './peladas.service';
+import { PartidaEntity } from '../../banco/entidades/partida.entity';
+import { ParticipacaoPartidaEntity } from '../../banco/entidades/participacao-partida.entity';
+import { EventoPartidaEntity } from '../../banco/entidades/evento-partida.entity';
+import { PartidasService } from './partidas.service';
+import { EventosPartidaService } from './eventos-partida.service';
 
 @Module({
   imports: [
@@ -23,6 +28,9 @@ import { PeladasService } from './peladas.service';
       JogadorEntity,
       ParticipantePeladaEntity,
       FilaJogadorEntity,
+      PartidaEntity,
+      ParticipacaoPartidaEntity,
+      EventoPartidaEntity,
     ]),
   ],
   controllers: [PeladasController],
@@ -31,6 +39,8 @@ import { PeladasService } from './peladas.service';
     ConfiguracoesService,
     ParticipantesService,
     SorteiosService,
+    PartidasService,
+    EventosPartidaService,
   ],
   exports: [PeladasService, ConfiguracoesService],
 })
