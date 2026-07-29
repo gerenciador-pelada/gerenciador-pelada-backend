@@ -32,4 +32,17 @@ export default tseslint.config(
       "prettier/prettier": ["error", { endOfLine: "auto" }],
     },
   },
+  {
+    // Os matchers do Jest (expect.objectContaining, mock.calls) sao tipados como
+    // `any`, e mocks de teste sao montados de proposito sem os tipos completos.
+    // Manter as regras type-unsafe ligadas nos testes so produz ruido e leva a
+    // eslint-disable espalhado por arquivo.
+    files: ['**/*.spec.ts', '**/*.e2e-spec.ts', 'test/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+    },
+  },
 );

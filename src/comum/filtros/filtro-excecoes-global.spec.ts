@@ -27,7 +27,6 @@ describe('FiltroExcecoesGlobal', () => {
     expect(json).toHaveBeenCalledWith(
       expect.objectContaining({
         sucesso: false,
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         erro: expect.objectContaining({
           codigo: 'JOGADORES_INSUFICIENTES',
           mensagem: 'Faltam 3 jogadores',
@@ -48,7 +47,6 @@ describe('FiltroExcecoesGlobal', () => {
     expect(json).toHaveBeenCalledWith(
       expect.objectContaining({
         sucesso: false,
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         erro: expect.objectContaining({ codigo: 'REQUISICAO_INVALIDA' }),
       }),
     );
@@ -60,7 +58,6 @@ describe('FiltroExcecoesGlobal', () => {
     new FiltroExcecoesGlobal().catch(new Error('senha do banco no log'), host);
 
     expect(status).toHaveBeenCalledWith(500);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(JSON.stringify(json.mock.calls[0][0])).not.toContain(
       'senha do banco',
     );
