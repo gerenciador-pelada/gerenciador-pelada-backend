@@ -23,6 +23,8 @@ import { AtualizarPeladaDto } from './dto/atualizar-pelada.dto';
 import { CriarPeladaDto } from './dto/criar-pelada.dto';
 import { FiltrarPeladasDto } from './dto/filtrar-peladas.dto';
 import { PeladasService } from './peladas.service';
+import { ParticipantesService } from './participantes.service';
+import { AdicionarParticipanteDto } from './dto/adicionar-participante.dto';
 
 @ApiTags('Peladas')
 @ApiBearerAuth()
@@ -31,6 +33,7 @@ export class PeladasController {
   constructor(
     private readonly peladas: PeladasService,
     private readonly configuracoes: ConfiguracoesService,
+    private readonly participantes: ParticipantesService,
   ) {}
 
   @Post()
@@ -40,6 +43,27 @@ export class PeladasController {
     @Body() dto: CriarPeladaDto,
   ) {
     return this.peladas.criar(usuario.id, dto);
+  }
+
+  @Post(':id/participantes') adicionarParticipante(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AdicionarParticipanteDto,
+  ) {
+    return this.participantes.adicionar(u.id, id, dto);
+  }
+  @Get(':id/participantes') listarParticipantes(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.participantes.listar(u.id, id);
+  }
+  @Post(':id/participantes/:participanteId/chegada') marcarChegada(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('participanteId', ParseUUIDPipe) participanteId: string,
+  ) {
+    return this.participantes.marcarChegada(u.id, id, participanteId);
   }
 
   @Get()
