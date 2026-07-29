@@ -4,6 +4,7 @@ import { BancoModule } from './banco/banco.module';
 import { AutenticacaoModule } from './modulos/autenticacao/autenticacao.module';
 import { JogadoresModule } from './modulos/jogadores/jogadores.module';
 import { LocaisModule } from './modulos/locais/locais.module';
+import { TemporadasModule } from './modulos/temporadas/temporadas.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { LocaisModule } from './modulos/locais/locais.module';
     AutenticacaoModule,
     JogadoresModule,
     LocaisModule,
+    TemporadasModule,
   ],
 })
 export class AppModule {}
