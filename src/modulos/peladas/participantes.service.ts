@@ -4,10 +4,10 @@ import { Repository } from 'typeorm';
 import { JogadorEntity } from '../../banco/entidades/jogador.entity';
 import { ParticipantePeladaEntity } from '../../banco/entidades/participante-pelada.entity';
 import { PeladaEntity } from '../../banco/entidades/pelada.entity';
-import { StatusParticipantePelada } from '../../comum/enums/status-participante-pelada.enum';
 import { MaquinaStatusPelada } from '../../dominio/pelada/maquina-status-pelada';
 import { ErroRegraPelada } from '../../dominio/erros/erro-regra-pelada';
 import { AdicionarParticipanteDto } from './dto/adicionar-participante.dto';
+import { StatusParticipantePelada } from '../../comum/enums/status-participante-pelada.enum';
 
 @Injectable()
 export class ParticipantesService {
@@ -89,6 +89,62 @@ export class ParticipantesService {
     }
     p.status = StatusParticipantePelada.PRESENTE;
     return this.participantes.save(p);
+  }
+  async alterarStatus(
+    usuarioId: string,
+    peladaId: string,
+    id: string,
+    status: StatusParticipantePelada,
+  ): Promise<ParticipantePeladaEntity> {
+    const pelada = await this.carregarPelada(usuarioId, peladaId);
+    this.garantirAberta(pelada);
+    const participante = await this.participantes.findOne({
+      where: { id, peladaId },
+    });
+    if (!participante)
+      throw new NotFoundException('Participante nao encontrado');
+    participante.status = status;
+    return this.participantes.save(participante);
+  }
+  async remover(
+    usuarioId: string,
+    peladaId: string,
+    id: string,
+  ): Promise<void> {
+    const pelada = await this.carregarPelada(usuarioId, peladaId);
+    this.garantirAberta(pelada);
+    const participante = await this.participantes.findOne({
+      where: { id, peladaId },
+    });
+    if (!participante)
+      throw new NotFoundException('Participante nao encontrado');
+    await this.participantes.remove(participante);
+  }
+  async reordenar(
+    usuarioId: string,
+    peladaId: string,
+    ids: string[],
+  ): Promise<ParticipantePeladaEntity[]> {
+    const pelada = await this.carregarPelada(usuarioId, peladaId);
+    this.garantirAberta(pelada);
+    const presentes = await this.participantes.find({
+      where: { peladaId, status: StatusParticipantePelada.PRESENTE },
+    });
+    if (
+      ids.length !== presentes.length ||
+      new Set(ids).size !== ids.length ||
+      presentes.some((p) => !ids.includes(p.id))
+    )
+      throw new ErroRegraPelada(
+        'ORDEM_CHEGADA_INVALIDA',
+        'A ordem deve conter todos os presentes uma unica vez',
+      );
+    const porId = new Map(presentes.map((p) => [p.id, p]));
+    ids.forEach((id, index) => {
+      const p = porId.get(id);
+      if (p) p.ordemChegada = index + 1;
+    });
+    return this.participantes.save(presentes);
   }
   private async carregarPelada(
     usuarioId: string,

@@ -25,6 +25,8 @@ import { FiltrarPeladasDto } from './dto/filtrar-peladas.dto';
 import { PeladasService } from './peladas.service';
 import { ParticipantesService } from './participantes.service';
 import { AdicionarParticipanteDto } from './dto/adicionar-participante.dto';
+import { AlterarStatusParticipanteDto } from './dto/alterar-status-participante.dto';
+import { ReordenarChegadaDto } from './dto/reordenar-chegada.dto';
 
 @ApiTags('Peladas')
 @ApiBearerAuth()
@@ -131,5 +133,39 @@ export class PeladasController {
     @Body() dto: AtualizarConfiguracaoDto,
   ) {
     return this.configuracoes.atualizar(usuario.id, id, dto);
+  }
+
+  @Patch(':id/participantes/:participanteId/status')
+  alterarStatusParticipante(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('participanteId', ParseUUIDPipe) participanteId: string,
+    @Body() dto: AlterarStatusParticipanteDto,
+  ) {
+    return this.participantes.alterarStatus(
+      u.id,
+      id,
+      participanteId,
+      dto.status,
+    );
+  }
+
+  @Delete(':id/participantes/:participanteId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  removerParticipante(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('participanteId', ParseUUIDPipe) participanteId: string,
+  ) {
+    return this.participantes.remover(u.id, id, participanteId);
+  }
+
+  @Patch(':id/ordem-chegada')
+  reordenarChegada(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReordenarChegadaDto,
+  ) {
+    return this.participantes.reordenar(u.id, id, dto.participanteIds);
   }
 }
