@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, IsNull, Not, Repository } from 'typeorm';
 import { JogadorEntity } from '../../banco/entidades/jogador.entity';
 import { ParticipantePeladaEntity } from '../../banco/entidades/participante-pelada.entity';
 import { PeladaEntity } from '../../banco/entidades/pelada.entity';
@@ -18,6 +18,7 @@ export class ParticipantesService {
     private readonly jogadores: Repository<JogadorEntity>,
     @InjectRepository(ParticipantePeladaEntity)
     private readonly participantes: Repository<ParticipantePeladaEntity>,
+    private readonly fonteDados: DataSource,
   ) {}
   async adicionar(
     usuarioId: string,
@@ -120,6 +121,14 @@ export class ParticipantesService {
       throw new NotFoundException('Participante nao encontrado');
     await this.participantes.remove(participante);
   }
+  /**
+   * Reordena a chegada.
+   *
+   * "Quem chegou" e quem tem ordemChegada preenchida, nao quem esta com status
+   * PRESENTE: assim que a partida comeca os participantes viram JOGANDO ou
+   * AGUARDANDO e continuam fazendo parte da ordem. Filtrar por status fazia os
+   * conjuntos divergirem do que a tela envia e a operacao falhar com 422.
+   */
   async reordenar(
     usuarioId: string,
     peladaId: string,
@@ -127,24 +136,43 @@ export class ParticipantesService {
   ): Promise<ParticipantePeladaEntity[]> {
     const pelada = await this.carregarPelada(usuarioId, peladaId);
     this.garantirAberta(pelada);
-    const presentes = await this.participantes.find({
-      where: { peladaId, status: StatusParticipantePelada.PRESENTE },
+
+    const chegaram = await this.participantes.find({
+      where: { peladaId, ordemChegada: Not(IsNull()) },
     });
     if (
-      ids.length !== presentes.length ||
+      ids.length !== chegaram.length ||
       new Set(ids).size !== ids.length ||
-      presentes.some((p) => !ids.includes(p.id))
+      chegaram.some((p) => !ids.includes(p.id))
     )
       throw new ErroRegraPelada(
         'ORDEM_CHEGADA_INVALIDA',
-        'A ordem deve conter todos os presentes uma unica vez',
+        'A ordem deve conter todos os que ja chegaram, uma unica vez',
+        { esperado: chegaram.length, recebido: ids.length },
       );
-    const porId = new Map(presentes.map((p) => [p.id, p]));
-    ids.forEach((id, index) => {
-      const p = porId.get(id);
-      if (p) p.ordemChegada = index + 1;
+
+    // Duas fases numa transacao. O indice (peladaId, ordemChegada) e UNIQUE,
+    // entao escrever as posicoes finais direto colide: trocar 1 com 2 faz o
+    // primeiro UPDATE bater no registro que ainda ocupa o 2. Passamos todos
+    // por valores negativos, que nenhum registro valido usa, e so entao
+    // aplicamos a ordem definitiva.
+    return this.fonteDados.transaction(async (gerenciador) => {
+      for (const [indice, id] of ids.entries()) {
+        await gerenciador.update(ParticipantePeladaEntity, id, {
+          ordemChegada: -(indice + 1),
+        });
+      }
+      for (const [indice, id] of ids.entries()) {
+        await gerenciador.update(ParticipantePeladaEntity, id, {
+          ordemChegada: indice + 1,
+        });
+      }
+      return gerenciador.find(ParticipantePeladaEntity, {
+        where: { peladaId },
+        relations: ['jogador'],
+        order: { ordemChegada: 'ASC', confirmadoEm: 'ASC' },
+      });
     });
-    return this.participantes.save(presentes);
   }
   private async carregarPelada(
     usuarioId: string,

@@ -11,6 +11,7 @@ import { StatusParticipantePelada } from '../../comum/enums/status-participante-
 import { StatusPartida } from '../../comum/enums/status-partida.enum';
 import { StatusPelada } from '../../comum/enums/status-pelada.enum';
 import { ErroRegraPelada } from '../../dominio/erros/erro-regra-pelada';
+import { MaquinaStatusPelada } from '../../dominio/pelada/maquina-status-pelada';
 import {
   JogadorSorteio,
   SorteadorAleatorio,
@@ -42,11 +43,25 @@ export class SorteiosService {
       relations: ['configuracao'],
     });
     if (!pelada) throw new NotFoundException('Pelada nao encontrada');
-    if (pelada.status !== StatusPelada.EM_ANDAMENTO)
+
+    // Sortear os primeiros times E o ato de comecar a pelada. Exigir uma
+    // transicao de status separada antes criava um passo invisivel: a pelada
+    // nascia ABERTA_INSCRICOES e o sorteio recusava, por mais gente presente
+    // que houvesse. A maquina de status continua governando a transicao.
+    if (pelada.status === StatusPelada.ABERTA_INSCRICOES) {
+      MaquinaStatusPelada.garantirTransicao(
+        pelada.status,
+        StatusPelada.EM_ANDAMENTO,
+      );
+      pelada.status = StatusPelada.EM_ANDAMENTO;
+      await this.peladas.save(pelada);
+    } else if (pelada.status !== StatusPelada.EM_ANDAMENTO) {
       throw new ErroRegraPelada(
         'SORTEIO_STATUS_INVALIDO',
-        'A pelada precisa estar em andamento',
+        'Esta pelada ja foi encerrada',
+        { status: pelada.status },
       );
+    }
 
     const presentes = await this.participantes.find({
       where: { peladaId, status: StatusParticipantePelada.PRESENTE },
