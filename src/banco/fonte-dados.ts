@@ -17,5 +17,3 @@ export const fonteDados = new DataSource({
   namingStrategy: new SnakeNamingStrategy(),
   synchronize: false,
 });
-
-export default fonteDados;

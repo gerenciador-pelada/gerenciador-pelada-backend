@@ -1,0 +1,4 @@
+export enum PerfilUsuario {
+  ADMINISTRADOR = 'ADMINISTRADOR',
+  ORGANIZADOR = 'ORGANIZADOR',
+}
