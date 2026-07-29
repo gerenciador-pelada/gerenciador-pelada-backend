@@ -19,6 +19,8 @@ import { PartidasService } from './partidas.service';
 import { EventosPartidaService } from './eventos-partida.service';
 import { PontuacaoJogadorEntity } from '../../banco/entidades/pontuacao-jogador.entity';
 import { RankingsService } from './rankings.service';
+import { HistoricoAcaoEntity } from '../../banco/entidades/historico-acao.entity';
+import { HistoricoService } from './historico.service';
 
 @Module({
   imports: [
@@ -34,6 +36,7 @@ import { RankingsService } from './rankings.service';
       ParticipacaoPartidaEntity,
       EventoPartidaEntity,
       PontuacaoJogadorEntity,
+      HistoricoAcaoEntity,
     ]),
   ],
   controllers: [PeladasController],
@@ -45,6 +48,7 @@ import { RankingsService } from './rankings.service';
     PartidasService,
     EventosPartidaService,
     RankingsService,
+    HistoricoService,
   ],
   exports: [PeladasService, ConfiguracoesService],
 })

@@ -31,6 +31,7 @@ import { SorteiosService } from './sorteios.service';
 import { PartidasService } from './partidas.service';
 import { EventosPartidaService } from './eventos-partida.service';
 import { RankingsService } from './rankings.service';
+import { HistoricoService } from './historico.service';
 import { RegistrarEventoPartidaDto } from './dto/registrar-evento-partida.dto';
 
 @ApiTags('Peladas')
@@ -45,6 +46,7 @@ export class PeladasController {
     private readonly partidas: PartidasService,
     private readonly eventos: EventosPartidaService,
     private readonly rankings: RankingsService,
+    private readonly historico: HistoricoService,
   ) {}
 
   @Post()
@@ -119,6 +121,15 @@ export class PeladasController {
 
   @Get('/rankings') listarRankings(@Query('peladaId') peladaId?: string) {
     return this.rankings.listar(peladaId);
+  }
+
+  @Get(':id/historico') listarHistorico(
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.historico.listar(id);
+  }
+  @Post(':id/desfazer') desfazer(@Param('id', ParseUUIDPipe) id: string) {
+    return this.historico.desfazer(id);
   }
 
   @Get(':id')
