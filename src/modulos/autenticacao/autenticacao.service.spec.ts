@@ -1,9 +1,10 @@
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import * as bcrypt from 'bcryptjs';
 import { UsuarioEntity } from '../../banco/entidades/usuario.entity';
+import { PerfilUsuario } from '../../comum/enums/perfil-usuario.enum';
 import { AutenticacaoService } from './autenticacao.service';
 
 describe('AutenticacaoService', () => {
@@ -84,6 +85,76 @@ describe('AutenticacaoService', () => {
 
       expect((repositorio.save.mock.calls[0][0] as UsuarioEntity).email).toBe(
         'a@b.com',
+      );
+    });
+  });
+
+  describe('entrar', () => {
+    function prepararBusca(usuario: Partial<UsuarioEntity> | null) {
+      repositorio.createQueryBuilder.mockReturnValue({
+        addSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(usuario),
+      });
+    }
+
+    it('recusa credencial com e-mail inexistente', async () => {
+      prepararBusca(null);
+
+      await expect(
+        servico.entrar({ email: 'a@b.com', senha: 'senhaSegura1' }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
+    it('recusa senha incorreta', async () => {
+      prepararBusca({
+        id: '1',
+        email: 'a@b.com',
+        ativo: true,
+        senhaHash: await bcrypt.hash('outraSenha1', 10),
+      });
+
+      await expect(
+        servico.entrar({ email: 'a@b.com', senha: 'senhaSegura1' }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
+    it('recusa usuario inativo mesmo com senha correta', async () => {
+      prepararBusca({
+        id: '1',
+        email: 'a@b.com',
+        ativo: false,
+        senhaHash: await bcrypt.hash('senhaSegura1', 10),
+      });
+
+      await expect(
+        servico.entrar({ email: 'a@b.com', senha: 'senhaSegura1' }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
+    it('devolve token e usuario sem o hash quando a credencial esta correta', async () => {
+      prepararBusca({
+        id: '1',
+        nome: 'Lucas',
+        email: 'a@b.com',
+        perfil: PerfilUsuario.ORGANIZADOR,
+        ativo: true,
+        senhaHash: await bcrypt.hash('senhaSegura1', 10),
+      });
+      jwt.signAsync.mockResolvedValue('token-fake');
+
+      const resultado = await servico.entrar({
+        email: 'a@b.com',
+        senha: 'senhaSegura1',
+      });
+
+      expect(resultado.token).toBe('token-fake');
+      expect(resultado.usuario).not.toHaveProperty('senhaHash');
+      expect(jwt.signAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sub: '1',
+          perfil: PerfilUsuario.ORGANIZADOR,
+        }),
       );
     });
   });
