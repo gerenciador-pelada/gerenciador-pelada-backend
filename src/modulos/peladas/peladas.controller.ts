@@ -67,19 +67,22 @@ export class PeladasController {
   }
 
   @Post('/partidas/:partidaId/iniciar') iniciarPartida(
+    @UsuarioAtual() u: UsuarioRequisicao,
     @Param('partidaId', ParseUUIDPipe) id: string,
   ) {
-    return this.partidas.iniciar(id);
+    return this.partidas.iniciar(u.id, id);
   }
   @Post('/partidas/:partidaId/finalizar') finalizarPartida(
+    @UsuarioAtual() u: UsuarioRequisicao,
     @Param('partidaId', ParseUUIDPipe) id: string,
   ) {
-    return this.partidas.finalizar(id);
+    return this.partidas.finalizar(u.id, id);
   }
   @Post('/partidas/:partidaId/cancelar') cancelarPartida(
+    @UsuarioAtual() u: UsuarioRequisicao,
     @Param('partidaId', ParseUUIDPipe) id: string,
   ) {
-    return this.partidas.cancelar(id);
+    return this.partidas.cancelar(u.id, id);
   }
   @Post('/partidas/:partidaId/eventos') registrarEvento(
     @UsuarioAtual() u: UsuarioRequisicao,
@@ -119,17 +122,24 @@ export class PeladasController {
     return this.peladas.listar(usuario.id, filtro);
   }
 
-  @Get('/rankings') listarRankings(@Query('peladaId') peladaId?: string) {
-    return this.rankings.listar(peladaId);
+  @Get('/rankings') listarRankings(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Query('peladaId') peladaId?: string,
+  ) {
+    return this.rankings.listar(u.id, peladaId);
   }
 
   @Get(':id/historico') listarHistorico(
+    @UsuarioAtual() u: UsuarioRequisicao,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.historico.listar(id);
+    return this.historico.listar(u.id, id);
   }
-  @Post(':id/desfazer') desfazer(@Param('id', ParseUUIDPipe) id: string) {
-    return this.historico.desfazer(id);
+  @Post(':id/desfazer') desfazer(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.historico.desfazer(u.id, id);
   }
 
   @Get(':id')

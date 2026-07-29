@@ -2,13 +2,16 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import { HistoricoAcaoEntity } from '../../banco/entidades/historico-acao.entity';
+import { AcessoPeladaService } from './acesso-pelada.service';
 @Injectable()
 export class HistoricoService {
   constructor(
     @InjectRepository(HistoricoAcaoEntity)
     private readonly historico: Repository<HistoricoAcaoEntity>,
+    private readonly acesso: AcessoPeladaService,
   ) {}
-  listar(peladaId: string) {
+  async listar(usuarioId: string, peladaId: string) {
+    await this.acesso.garantirPelada(usuarioId, peladaId);
     return this.historico.find({
       where: { peladaId },
       order: { criadoEm: 'DESC' },
@@ -32,7 +35,8 @@ export class HistoricoService {
       }),
     );
   }
-  async desfazer(peladaId: string) {
+  async desfazer(usuarioId: string, peladaId: string) {
+    await this.acesso.garantirPelada(usuarioId, peladaId);
     const acao = await this.historico.findOne({
       where: { peladaId, desfeitaEm: IsNull() },
       order: { criadoEm: 'DESC' },

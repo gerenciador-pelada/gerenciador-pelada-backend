@@ -21,6 +21,7 @@ import { PontuacaoJogadorEntity } from '../../banco/entidades/pontuacao-jogador.
 import { RankingsService } from './rankings.service';
 import { HistoricoAcaoEntity } from '../../banco/entidades/historico-acao.entity';
 import { HistoricoService } from './historico.service';
+import { AcessoPeladaService } from './acesso-pelada.service';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { HistoricoService } from './historico.service';
   ],
   controllers: [PeladasController],
   providers: [
+    AcessoPeladaService,
     PeladasService,
     ConfiguracoesService,
     ParticipantesService,
