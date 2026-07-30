@@ -10,6 +10,115 @@ const CASA = 'time-casa';
 const VISITANTE = 'time-visitante';
 
 describe('PainelService', () => {
+  it('mostra o goleiro avulso no time e preserva a mesma pessoa na fila', async () => {
+    const partida = {
+      id: PARTIDA,
+      peladaId: PELADA,
+      numero: 4,
+      status: StatusPartida.EM_ANDAMENTO,
+      golsCasa: 0,
+      golsVisitante: 0,
+      vencedorDecisao: null,
+      timeCasaId: CASA,
+      timeVisitanteId: VISITANTE,
+      goleiroCasaId: 'goleiro-fila',
+      goleiroVisitanteId: null,
+      iniciadaEm: new Date('2026-07-30T21:00:00Z'),
+      finalizadaEm: null,
+    };
+    const participantes = [
+      {
+        id: 'participante-a',
+        ordemChegada: 1,
+        ehGoleiroFixo: false,
+        jogador: { nome: 'Ana', apelido: null },
+      },
+      {
+        id: 'participante-b',
+        ordemChegada: 2,
+        ehGoleiroFixo: false,
+        jogador: { nome: 'Bia', apelido: null },
+      },
+      {
+        id: 'goleiro-fila',
+        ordemChegada: 3,
+        ehGoleiroFixo: false,
+        jogador: { nome: 'Caio', apelido: 'Caião' },
+      },
+    ];
+    const servico = new PainelService(
+      {
+        findOne: jest.fn().mockResolvedValue({
+          id: PELADA,
+          nome: 'Pelada',
+          status: StatusPelada.EM_ANDAMENTO,
+          local: null,
+          configuracao: {
+            jogadoresLinhaPorTime: 1,
+            duracaoPartidaMinutos: 10,
+            maximoGols: null,
+            permiteEmpate: true,
+            regraEmpate: RegraEmpate.AMBOS_SAEM,
+          },
+        }),
+      } as never,
+      { findOne: jest.fn().mockResolvedValue(partida) } as never,
+      {
+        find: jest.fn().mockResolvedValue([
+          { id: CASA, nome: 'Casa', cor: null, vitoriasConsecutivas: 0 },
+          {
+            id: VISITANTE,
+            nome: 'Visitante',
+            cor: null,
+            vitoriasConsecutivas: 0,
+          },
+        ]),
+      } as never,
+      {
+        find: jest.fn().mockResolvedValue([
+          {
+            timeId: CASA,
+            participanteId: 'participante-a',
+            ehGoleiro: false,
+          },
+          {
+            timeId: VISITANTE,
+            participanteId: 'participante-b',
+            ehGoleiro: false,
+          },
+        ]),
+      } as never,
+      { find: jest.fn().mockResolvedValue(participantes) } as never,
+      {
+        find: jest.fn().mockResolvedValue([
+          {
+            peladaId: PELADA,
+            participanteId: 'goleiro-fila',
+            posicao: 1,
+            ativo: true,
+          },
+        ]),
+      } as never,
+      { find: jest.fn().mockResolvedValue([]) } as never,
+    );
+
+    const resultado = await servico.montar(DONO, PELADA);
+
+    expect(resultado.timeCasa?.jogadores).toContainEqual(
+      expect.objectContaining({
+        participanteId: 'goleiro-fila',
+        ehGoleiro: true,
+        ehGoleiroTemporario: true,
+      }),
+    );
+    expect(resultado.fila).toContainEqual(
+      expect.objectContaining({
+        participanteId: 'goleiro-fila',
+        ehGoleiro: false,
+      }),
+    );
+  });
+
   it('mostra configuracao e ultima partida quando a pelada esta finalizada', async () => {
     const ultimaPartida = {
       id: PARTIDA,

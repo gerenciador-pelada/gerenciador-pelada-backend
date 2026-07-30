@@ -1,6 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, IsNull, Not, Repository } from 'typeorm';
+import {
+  DataSource,
+  EntityManager,
+  In,
+  IsNull,
+  Not,
+  Repository,
+} from 'typeorm';
 import { FilaJogadorEntity } from '../../banco/entidades/fila-jogador.entity';
 import { JogadorEntity } from '../../banco/entidades/jogador.entity';
 import { JogadorTimeEntity } from '../../banco/entidades/jogador-time.entity';
@@ -239,49 +246,196 @@ export class ParticipantesService {
   }
 
   /**
-   * Define quem e o goleiro de um time, ou tira o goleiro.
+   * Define o goleiro avulso de um lado da partida.
    *
-   * So mexe no elenco daquele time: nada entra nem sai da fila. E o caso da
-   * pelada sem goleiro fixo, em que o organizador combina na hora quem vai
-   * para o gol — e pode trocar a cada partida sem que isso afete a rotacao.
-   *
-   * `participanteId` nulo deixa o time sem goleiro.
+   * O goleiro vem de fora dos elencos e pertence somente a partida atual. Ele
+   * continua na fila, na mesma posicao, e nao vira membro permanente do time.
+   * `participanteId` nulo remove a escolha avulsa.
    */
   async definirGoleiro(
     usuarioId: string,
     peladaId: string,
     timeId: string,
     participanteId: string | null,
-  ): Promise<JogadorTimeEntity[]> {
+  ): Promise<PartidaEntity> {
     const pelada = await this.carregarPelada(usuarioId, peladaId);
     this.garantirAberta(pelada);
 
-    const elenco = await this.jogadoresTime.find({
-      where: { timeId, ativo: true },
-    });
-    if (elenco.length === 0)
-      throw new NotFoundException('Time nao encontrado nesta pelada');
+    return this.fonteDados.transaction(async (gerenciador) => {
+      const partida = await gerenciador.findOne(PartidaEntity, {
+        where: {
+          peladaId,
+          status: In([StatusPartida.AGUARDANDO, StatusPartida.EM_ANDAMENTO]),
+        },
+        order: { numero: 'DESC' },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (
+        !partida ||
+        (partida.timeCasaId !== timeId && partida.timeVisitanteId !== timeId)
+      ) {
+        throw new NotFoundException('Time nao encontrado na partida atual');
+      }
 
-    if (participanteId !== null) {
-      const membro = elenco.find((e) => e.participanteId === participanteId);
-      if (!membro)
-        throw new ErroRegraPelada(
-          'JOGADOR_FORA_DO_TIME',
-          'So quem esta no time pode ser o goleiro dele',
+      const ladoCasa = partida.timeCasaId === timeId;
+      const anterior = ladoCasa
+        ? partida.goleiroCasaId
+        : partida.goleiroVisitanteId;
+      if (anterior === participanteId) return partida;
+
+      if (participanteId !== null) {
+        const outroLado = ladoCasa
+          ? partida.goleiroVisitanteId
+          : partida.goleiroCasaId;
+        if (outroLado === participanteId) {
+          throw new ErroRegraPelada(
+            'GOLEIRO_JA_ESCALADO',
+            'A mesma pessoa nao pode ocupar os dois gols',
+          );
+        }
+
+        const participante = await gerenciador.findOne(
+          ParticipantePeladaEntity,
+          { where: { id: participanteId, peladaId } },
         );
-    }
+        if (!participante) {
+          throw new NotFoundException('Participante nao encontrado');
+        }
 
-    for (const membro of elenco) {
-      const deveSerGoleiro = membro.participanteId === participanteId;
-      if (membro.ehGoleiro !== deveSerGoleiro) {
-        await this.jogadoresTime.update(membro.id, {
-          ehGoleiro: deveSerGoleiro,
+        const podeJogar =
+          participante.ordemChegada !== null &&
+          [
+            StatusParticipantePelada.PRESENTE,
+            StatusParticipantePelada.AGUARDANDO,
+          ].includes(participante.status);
+        if (!podeJogar) {
+          throw new ErroRegraPelada(
+            'GOLEIRO_INDISPONIVEL',
+            'Escolha alguem presente e disponivel fora da partida',
+          );
+        }
+
+        const membroAtivo = await gerenciador.findOne(JogadorTimeEntity, {
+          where: [
+            {
+              timeId: partida.timeCasaId,
+              participanteId,
+              ativo: true,
+            },
+            {
+              timeId: partida.timeVisitanteId,
+              participanteId,
+              ativo: true,
+            },
+          ],
         });
-        membro.ehGoleiro = deveSerGoleiro;
+        if (membroAtivo) {
+          throw new ErroRegraPelada(
+            'JOGADOR_JA_EM_CAMPO',
+            'O goleiro avulso precisa estar fora da partida',
+          );
+        }
+
+        const goleiroFixo = await gerenciador.findOne(JogadorTimeEntity, {
+          where: { timeId, ehGoleiro: true, ativo: true },
+        });
+        if (goleiroFixo) {
+          throw new ErroRegraPelada(
+            'TIME_JA_TEM_GOLEIRO_FIXO',
+            'Este time ja possui goleiro fixo',
+          );
+        }
+
+        if (partida.status === StatusPartida.EM_ANDAMENTO) {
+          const participacaoAtiva = await gerenciador.findOne(
+            ParticipacaoPartidaEntity,
+            {
+              where: {
+                partidaId: partida.id,
+                participanteId,
+                saiuEm: IsNull(),
+              },
+            },
+          );
+          if (participacaoAtiva) {
+            throw new ErroRegraPelada(
+              'JOGADOR_JA_EM_CAMPO',
+              'O goleiro avulso precisa estar fora da partida',
+            );
+          }
+        }
+      }
+
+      if (ladoCasa) partida.goleiroCasaId = participanteId;
+      else partida.goleiroVisitanteId = participanteId;
+      await gerenciador.save(partida);
+
+      if (partida.status === StatusPartida.EM_ANDAMENTO) {
+        await this.sincronizarParticipacaoGoleiro(
+          gerenciador,
+          partida,
+          timeId,
+          anterior,
+          participanteId,
+        );
+      }
+
+      return partida;
+    });
+  }
+
+  private async sincronizarParticipacaoGoleiro(
+    gerenciador: EntityManager,
+    partida: PartidaEntity,
+    timeId: string,
+    anterior: string | null,
+    proximo: string | null,
+  ): Promise<void> {
+    const agora = new Date();
+    if (anterior) {
+      const participacaoAnterior = await gerenciador.findOne(
+        ParticipacaoPartidaEntity,
+        {
+          where: {
+            partidaId: partida.id,
+            participanteId: anterior,
+            saiuEm: IsNull(),
+          },
+        },
+      );
+      if (participacaoAnterior) {
+        await gerenciador.update(
+          ParticipacaoPartidaEntity,
+          participacaoAnterior.id,
+          { saiuEm: agora },
+        );
       }
     }
 
-    return elenco;
+    if (!proximo) return;
+
+    const existente = await gerenciador.findOne(ParticipacaoPartidaEntity, {
+      where: { partidaId: partida.id, participanteId: proximo },
+    });
+    if (existente) {
+      await gerenciador.update(ParticipacaoPartidaEntity, existente.id, {
+        timeId,
+        ehGoleiro: true,
+        saiuEm: null,
+      });
+      return;
+    }
+
+    await gerenciador.save(
+      gerenciador.create(ParticipacaoPartidaEntity, {
+        partidaId: partida.id,
+        participanteId: proximo,
+        timeId,
+        ehGoleiro: true,
+        saiuEm: null,
+        minutosJogados: null,
+      }),
+    );
   }
 
   /**

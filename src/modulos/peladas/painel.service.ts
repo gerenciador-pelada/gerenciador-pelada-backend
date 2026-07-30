@@ -16,6 +16,7 @@ export interface JogadorPainel {
   nome: string;
   apelido: string | null;
   ehGoleiro: boolean;
+  ehGoleiroTemporario: boolean;
   ordemChegada: number | null;
 }
 
@@ -117,7 +118,7 @@ export class PainelService {
       timeCasa: times.casa,
       timeVisitante: times.visitante,
       fila: registrosFila.map((f) =>
-        this.mapearJogador(porParticipante.get(f.participanteId), false),
+        this.mapearJogador(porParticipante.get(f.participanteId), false, false),
       ),
       eventosRecentes: eventos.map((e) => ({
         id: e.id,
@@ -173,19 +174,40 @@ export class PainelService {
     const montar = (timeId: string): TimePainel | null => {
       const time = times.find((t) => t.id === timeId);
       if (!time) return null;
+      const jogadores = elenco
+        .filter((e) => e.timeId === timeId)
+        .map((e) =>
+          this.mapearJogador(
+            porParticipante.get(e.participanteId),
+            e.ehGoleiro,
+            false,
+          ),
+        );
+      const goleiroTemporarioId =
+        timeId === partida.timeCasaId
+          ? partida.goleiroCasaId
+          : partida.goleiroVisitanteId;
+      if (
+        goleiroTemporarioId &&
+        !jogadores.some(
+          (jogador) => jogador.participanteId === goleiroTemporarioId,
+        )
+      ) {
+        jogadores.push(
+          this.mapearJogador(
+            porParticipante.get(goleiroTemporarioId),
+            true,
+            true,
+          ),
+        );
+      }
+
       return {
         id: time.id,
         nome: time.nome,
         cor: time.cor,
         vitoriasConsecutivas: time.vitoriasConsecutivas,
-        jogadores: elenco
-          .filter((e) => e.timeId === timeId)
-          .map((e) =>
-            this.mapearJogador(
-              porParticipante.get(e.participanteId),
-              e.ehGoleiro,
-            ),
-          ),
+        jogadores,
       };
     };
 
@@ -198,12 +220,14 @@ export class PainelService {
   private mapearJogador(
     participante: ParticipantePeladaEntity | undefined,
     ehGoleiro: boolean,
+    ehGoleiroTemporario: boolean,
   ): JogadorPainel {
     return {
       participanteId: participante?.id ?? '',
       nome: participante?.jogador?.nome ?? 'Desconhecido',
       apelido: participante?.jogador?.apelido ?? null,
       ehGoleiro,
+      ehGoleiroTemporario,
       ordemChegada: participante?.ordemChegada ?? null,
     };
   }

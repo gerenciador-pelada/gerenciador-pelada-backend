@@ -24,7 +24,14 @@ const PELADA = 'pelada-1';
  * for o dono. E assim que o servico funciona de verdade: a posse entra no
  * WHERE, entao a partida "some" para quem nao e dono.
  */
-function criarRepositorio(donoDaPartida: string, status: StatusPartida) {
+function criarRepositorio(
+  donoDaPartida: string,
+  status: StatusPartida,
+  goleiros: {
+    goleiroCasaId?: string | null;
+    goleiroVisitanteId?: string | null;
+  } = {},
+) {
   const save = jest.fn().mockImplementation((p: unknown) => Promise.resolve(p));
   let usuarioConsultado = '';
 
@@ -45,6 +52,8 @@ function criarRepositorio(donoDaPartida: string, status: StatusPartida) {
               numero: 1,
               timeCasaId: 'time-a',
               timeVisitanteId: 'time-b',
+              goleiroCasaId: goleiros.goleiroCasaId ?? null,
+              goleiroVisitanteId: goleiros.goleiroVisitanteId ?? null,
               golsCasa: 0,
               golsVisitante: 0,
               status,
@@ -260,6 +269,39 @@ describe('PartidasService', () => {
       ).toBe(true);
       expect(partida.status).toBe(StatusPartida.EM_ANDAMENTO);
       expect(partida.iniciadaEm).toBeInstanceOf(Date);
+    });
+
+    it('inclui o goleiro avulso sem coloca-lo no elenco do time', async () => {
+      const { repositorio } = criarRepositorio(DONO, StatusPartida.AGUARDANDO, {
+        goleiroCasaId: 'goleiro-da-fila',
+      });
+      const salvos: unknown[] = [];
+      const gerenciador = {
+        find: jest.fn().mockResolvedValue([
+          { timeId: 'time-a', participanteId: 'p1', ehGoleiro: false },
+          { timeId: 'time-b', participanteId: 'p2', ehGoleiro: false },
+        ] as Partial<JogadorTimeEntity>[]),
+        create: jest.fn().mockImplementation((_e, dados: unknown) => dados),
+        save: jest.fn().mockImplementation((dados: unknown) => {
+          salvos.push(dados);
+          return Promise.resolve(dados);
+        }),
+      };
+      const servico = new PartidasService(
+        repositorio as never,
+        criarFonteDados(gerenciador),
+      );
+
+      await servico.iniciar(DONO, PARTIDA);
+
+      expect(salvos[0]).toContainEqual(
+        expect.objectContaining({
+          partidaId: PARTIDA,
+          participanteId: 'goleiro-da-fila',
+          timeId: 'time-a',
+          ehGoleiro: true,
+        }),
+      );
     });
 
     it('recusa iniciar partida que nao esta aguardando', async () => {

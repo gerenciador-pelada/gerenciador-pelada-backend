@@ -75,9 +75,37 @@ export class PartidasService {
           { timeId: partida.timeVisitanteId, ativo: true },
         ],
       });
+      const idsElenco = new Set(elenco.map((membro) => membro.participanteId));
+      const goleirosAvulsos = [
+        partida.goleiroCasaId
+          ? {
+              participanteId: partida.goleiroCasaId,
+              timeId: partida.timeCasaId,
+            }
+          : null,
+        partida.goleiroVisitanteId
+          ? {
+              participanteId: partida.goleiroVisitanteId,
+              timeId: partida.timeVisitanteId,
+            }
+          : null,
+      ].filter(
+        (goleiro): goleiro is { participanteId: string; timeId: string } =>
+          goleiro !== null && !idsElenco.has(goleiro.participanteId),
+      );
 
       await gerenciador.save(
-        elenco.map((membro) =>
+        [
+          ...elenco.map((membro) => ({
+            participanteId: membro.participanteId,
+            timeId: membro.timeId,
+            ehGoleiro: membro.ehGoleiro,
+          })),
+          ...goleirosAvulsos.map((goleiro) => ({
+            ...goleiro,
+            ehGoleiro: true,
+          })),
+        ].map((membro) =>
           gerenciador.create(ParticipacaoPartidaEntity, {
             partidaId: partida.id,
             participanteId: membro.participanteId,
