@@ -314,6 +314,20 @@ export class ParticipantesService {
     });
     if (!participante)
       throw new NotFoundException('Participante nao encontrado');
+
+    // Quem ja chegou tem participacoes, eventos e pontuacao apontando para ele.
+    // Nao ha FK nessas colunas, entao apagar nao cascateia: deixaria gols
+    // orfaos aparecendo como "Desconhecido" e o ranking contando pontos de
+    // alguem que sumiu. Nesse caso a saida correta e desistencia, que preserva
+    // o historico. A remocao fisica fica so para quem foi adicionado por engano
+    // e nunca apareceu.
+    if (participante.ordemChegada !== null) {
+      throw new ErroRegraPelada(
+        'PARTICIPANTE_JA_CHEGOU',
+        'Quem ja chegou nao pode ser apagado: use desistencia para preservar o historico',
+      );
+    }
+
     await this.participantes.remove(participante);
   }
   /**
