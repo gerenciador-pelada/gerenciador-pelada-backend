@@ -52,6 +52,21 @@ export class PartidaEntity {
   })
   status: StatusPartida;
   @Column({ type: 'timestamptz', nullable: true }) iniciadaEm: Date | null;
+
+  /**
+   * Quando o cronometro foi pausado. Nulo = correndo.
+   *
+   * O tempo nao pode ser so `agora - iniciadaEm`: com pausa, o relogio anda
+   * menos que o calendario. `segundosAcumulados` guarda o que ja correu antes
+   * da pausa atual, e `pausadaEm` marca desde quando esta parado. Guardar isso
+   * no servidor e o que faz a pausa sobreviver ao F5 e valer igual em todos os
+   * celulares que acompanham a mesma partida.
+   */
+  @Column({ type: 'timestamptz', nullable: true }) pausadaEm: Date | null;
+
+  /** Segundos ja corridos antes da pausa atual. */
+  @Column({ type: 'int', default: 0 }) segundosAcumulados: number;
+
   @Column({ type: 'timestamptz', nullable: true }) finalizadaEm: Date | null;
   @Column({ type: 'varchar', length: 10, nullable: true })
   vencedorDecisao: 'CASA' | 'VISITANTE' | null;

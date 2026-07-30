@@ -113,6 +113,35 @@ export class PeladasController {
   ) {
     return this.partidas.finalizar(u.id, id, dto);
   }
+  // Pausa vive no servidor, nao no cliente: dois celulares acompanham a mesma
+  // partida e precisam ler o mesmo relogio, e um F5 nao pode ressuscitar tempo.
+  @Post('/partidas/:partidaId/pausar')
+  @ApiOperation({ summary: 'Para o cronometro sem encerrar a partida' })
+  pausarPartida(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('partidaId', ParseUUIDPipe) partidaId: string,
+  ) {
+    return this.partidas.pausar(u.id, partidaId);
+  }
+
+  @Post('/partidas/:partidaId/retomar')
+  @ApiOperation({ summary: 'Volta a contar o tempo' })
+  retomarPartida(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('partidaId', ParseUUIDPipe) partidaId: string,
+  ) {
+    return this.partidas.retomar(u.id, partidaId);
+  }
+
+  @Post('/partidas/:partidaId/zerar')
+  @ApiOperation({ summary: 'Zera cronometro e placar, e deixa parado no zero' })
+  zerarPartida(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('partidaId', ParseUUIDPipe) partidaId: string,
+  ) {
+    return this.partidas.zerar(u.id, partidaId);
+  }
+
   @Post('/partidas/:partidaId/cancelar') cancelarPartida(
     @UsuarioAtual() u: UsuarioRequisicao,
     @Param('partidaId', ParseUUIDPipe) id: string,

@@ -273,6 +273,86 @@ export class PartidasService {
    * fim da fila, porque acabou de jogar; se a intencao era ir embora, isso e
    * desistencia, que e outra acao.
    */
+  /**
+   * Para o cronometro sem encerrar a partida — chuva, discussao, bola na rua.
+   *
+   * Fecha o trecho corrido somando em `segundosAcumulados` e marca `pausadaEm`.
+   * Assim o tempo nunca depende de quem esta olhando: dois celulares na mesma
+   * partida leem o mesmo relogio, e um F5 nao ressuscita o tempo parado.
+   */
+  async pausar(usuarioId: string, partidaId: string): Promise<PartidaEntity> {
+    const partida = await this.buscar(usuarioId, partidaId);
+    if (partida.status !== StatusPartida.EM_ANDAMENTO)
+      throw new ErroRegraPelada(
+        'PARTIDA_NAO_EM_ANDAMENTO',
+        'So da para pausar uma partida em andamento',
+      );
+    if (partida.pausadaEm) return partida; // idempotente: dois toques nao somam
+
+    const desde = partida.iniciadaEm ?? new Date();
+    const corridos = Math.max(
+      0,
+      Math.floor((Date.now() - desde.getTime()) / 1000),
+    );
+    await this.partidas.update(partidaId, {
+      pausadaEm: new Date(),
+      segundosAcumulados: partida.segundosAcumulados + corridos,
+    });
+    return this.buscar(usuarioId, partidaId);
+  }
+
+  /**
+   * Retoma. `iniciadaEm` vira agora: o que ja correu esta em
+   * `segundosAcumulados`, entao a referencia recomeca do zero deste trecho.
+   */
+  async retomar(usuarioId: string, partidaId: string): Promise<PartidaEntity> {
+    const partida = await this.buscar(usuarioId, partidaId);
+    if (partida.status !== StatusPartida.EM_ANDAMENTO)
+      throw new ErroRegraPelada(
+        'PARTIDA_NAO_EM_ANDAMENTO',
+        'So da para retomar uma partida em andamento',
+      );
+    if (!partida.pausadaEm) return partida;
+
+    await this.partidas.update(partidaId, {
+      pausadaEm: null,
+      iniciadaEm: new Date(),
+    });
+    return this.buscar(usuarioId, partidaId);
+  }
+
+  /**
+   * Zera relogio E placar, deixando a partida parada no zero.
+   *
+   * O placar vai junto por decisao do organizador: quando ele zera, e porque a
+   * partida vai recomecar do nada — manter os gols daria um placar que nao
+   * corresponde a nenhum tempo jogado. Os eventos ja registrados sao apagados
+   * pelo mesmo motivo, senao o historico contaria gols de uma partida que
+   * deixou de existir.
+   */
+  async zerar(usuarioId: string, partidaId: string): Promise<PartidaEntity> {
+    const partida = await this.buscar(usuarioId, partidaId);
+    if (partida.status === StatusPartida.FINALIZADA)
+      throw new ErroRegraPelada(
+        'PARTIDA_FINALIZADA',
+        'Partida ja encerrada: nao da para zerar',
+      );
+
+    return this.fonteDados.transaction(async (gerenciador) => {
+      await gerenciador.delete(EventoPartidaEntity, { partidaId });
+      await gerenciador.update(PartidaEntity, partidaId, {
+        golsCasa: 0,
+        golsVisitante: 0,
+        segundosAcumulados: 0,
+        pausadaEm: new Date(),
+        iniciadaEm: new Date(),
+      });
+      return gerenciador.findOneOrFail(PartidaEntity, {
+        where: { id: partidaId },
+      });
+    });
+  }
+
   async substituir(
     usuarioId: string,
     partidaId: string,
