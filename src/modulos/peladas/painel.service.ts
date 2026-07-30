@@ -152,6 +152,11 @@ export class PainelService {
       golsCasa: partida.golsCasa,
       golsVisitante: partida.golsVisitante,
       iniciadaEm: partida.iniciadaEm,
+      // Sem estes dois o front nao tem como saber que o relogio esta parado,
+      // nem quanto ja correu antes da pausa — ele contaria do zero e a pausa
+      // seria invisivel para quem abrir a tela depois.
+      pausadaEm: partida.pausadaEm,
+      segundosAcumulados: partida.segundosAcumulados,
       finalizadaEm: partida.finalizadaEm,
       vencedorDecisao: partida.vencedorDecisao ?? null,
     };
