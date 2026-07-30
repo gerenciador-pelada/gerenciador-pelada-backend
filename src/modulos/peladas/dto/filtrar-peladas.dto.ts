@@ -15,6 +15,11 @@ export class FiltrarPeladasDto extends PaginacaoDto {
   @IsString()
   busca?: string;
 
+  @ApiPropertyOptional({ format: 'uuid' })
+  @IsOptional()
+  @IsUUID('4', { message: 'grupoId deve ser um UUID valido' })
+  grupoId?: string;
+
   @ApiPropertyOptional({ enum: StatusPelada })
   @IsOptional()
   @IsEnum(StatusPelada, { message: 'status invalido' })

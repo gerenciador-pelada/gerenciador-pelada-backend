@@ -1,6 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { GrupoPeladaEntity } from '../../banco/entidades/grupo-pelada.entity';
 import { LocalPeladaEntity } from '../../banco/entidades/local-pelada.entity';
 import { PeladaEntity } from '../../banco/entidades/pelada.entity';
 import { TemporadaEntity } from '../../banco/entidades/temporada.entity';
@@ -11,6 +12,7 @@ import { PeladasService } from './peladas.service';
 const DONO = 'usuario-1';
 const OUTRO = 'usuario-2';
 const LOCAL = '11111111-1111-4111-8111-111111111111';
+const GRUPO = '44444444-4444-4444-8444-444444444444';
 
 describe('PeladasService', () => {
   let servico: PeladasService;
@@ -21,15 +23,22 @@ describe('PeladasService', () => {
     softRemove: jest.fn(),
     createQueryBuilder: jest.fn(),
   };
+  const grupos = { findOne: jest.fn() };
   const locais = { findOne: jest.fn() };
   const temporadas = { findOne: jest.fn() };
 
   beforeEach(async () => {
     jest.resetAllMocks();
+    grupos.findOne.mockResolvedValue({
+      id: GRUPO,
+      organizadorId: DONO,
+      nome: 'Pelada de quarta',
+    });
     const modulo = await Test.createTestingModule({
       providers: [
         PeladasService,
         { provide: getRepositoryToken(PeladaEntity), useValue: peladas },
+        { provide: getRepositoryToken(GrupoPeladaEntity), useValue: grupos },
         { provide: getRepositoryToken(LocalPeladaEntity), useValue: locais },
         { provide: getRepositoryToken(TemporadaEntity), useValue: temporadas },
       ],
@@ -38,12 +47,25 @@ describe('PeladasService', () => {
   });
 
   const dtoValido = {
-    nome: 'Pelada de quarta',
+    grupoId: GRUPO,
     dataHora: '2026-08-05T19:30:00-03:00',
     localId: LOCAL,
   };
 
   describe('criar', () => {
+    it('recusa grupo que nao pertence ao organizador', async () => {
+      grupos.findOne.mockResolvedValue(null);
+      locais.findOne.mockResolvedValue({ id: LOCAL, usuarioId: DONO });
+
+      await expect(servico.criar(DONO, dtoValido)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(grupos.findOne).toHaveBeenCalledWith({
+        where: { id: GRUPO, organizadorId: DONO },
+      });
+      expect(peladas.save).not.toHaveBeenCalled();
+    });
+
     it('recusa local que nao pertence ao organizador', async () => {
       locais.findOne.mockResolvedValue(null);
 
@@ -64,6 +86,8 @@ describe('PeladasService', () => {
 
       const salva = peladas.create.mock.calls[0][0] as PeladaEntity;
       expect(salva.organizadorId).toBe(DONO);
+      expect(salva.grupoId).toBe(GRUPO);
+      expect(salva.nome).toBe('Pelada de quarta');
       expect(salva.status).toBe(StatusPelada.ABERTA_INSCRICOES);
       expect(salva.configuracao).toBeDefined();
       expect(criada.id).toBe('pelada-1');
@@ -103,7 +127,7 @@ describe('PeladasService', () => {
 
       expect(peladas.findOne).toHaveBeenCalledWith(
         expect.objectContaining({
-          relations: expect.arrayContaining(['configuracao']),
+          relations: expect.arrayContaining(['configuracao', 'grupo']),
         }),
       );
     });
@@ -155,7 +179,7 @@ describe('PeladasService', () => {
   });
 
   describe('atualizar', () => {
-    it('atualiza os dados da pelada e valida um novo local', async () => {
+    it('atualiza data e local sem alterar o nome herdado do grupo', async () => {
       const novoLocal = '33333333-3333-4333-8333-333333333333';
       const pelada = {
         id: 'pelada-1',
@@ -170,7 +194,6 @@ describe('PeladasService', () => {
       peladas.save.mockImplementation((d: PeladaEntity) => Promise.resolve(d));
 
       const atualizada = await servico.atualizar(DONO, 'pelada-1', {
-        nome: '  Pelada atualizada  ',
         dataHora: '2026-08-12T20:00:00-03:00',
         localId: novoLocal,
       });
@@ -178,7 +201,7 @@ describe('PeladasService', () => {
       expect(locais.findOne).toHaveBeenCalledWith({
         where: { id: novoLocal, usuarioId: DONO },
       });
-      expect(atualizada.nome).toBe('Pelada atualizada');
+      expect(atualizada.nome).toBe('Pelada antiga');
       expect(atualizada.localId).toBe(novoLocal);
       expect(atualizada.dataHora).toEqual(
         new Date('2026-08-12T20:00:00-03:00'),

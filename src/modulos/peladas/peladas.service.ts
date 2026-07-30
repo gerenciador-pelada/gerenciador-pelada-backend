@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfiguracaoPeladaEntity } from '../../banco/entidades/configuracao-pelada.entity';
+import { GrupoPeladaEntity } from '../../banco/entidades/grupo-pelada.entity';
 import { LocalPeladaEntity } from '../../banco/entidades/local-pelada.entity';
 import { PeladaEntity } from '../../banco/entidades/pelada.entity';
 import { TemporadaEntity } from '../../banco/entidades/temporada.entity';
@@ -18,6 +19,8 @@ export class PeladasService {
   constructor(
     @InjectRepository(PeladaEntity)
     private readonly peladas: Repository<PeladaEntity>,
+    @InjectRepository(GrupoPeladaEntity)
+    private readonly grupos: Repository<GrupoPeladaEntity>,
     @InjectRepository(LocalPeladaEntity)
     private readonly locais: Repository<LocalPeladaEntity>,
     @InjectRepository(TemporadaEntity)
@@ -25,6 +28,7 @@ export class PeladasService {
   ) {}
 
   async criar(usuarioId: string, dto: CriarPeladaDto): Promise<PeladaEntity> {
+    const grupo = await this.garantirGrupoDoOrganizador(usuarioId, dto.grupoId);
     await this.garantirLocalDoOrganizador(usuarioId, dto.localId);
     if (dto.temporadaId) {
       await this.garantirTemporadaDoOrganizador(usuarioId, dto.temporadaId);
@@ -32,9 +36,10 @@ export class PeladasService {
 
     const pelada = this.peladas.create({
       organizadorId: usuarioId,
+      grupoId: grupo.id,
       localId: dto.localId,
       temporadaId: dto.temporadaId ?? null,
-      nome: dto.nome.trim(),
+      nome: grupo.nome,
       dataHora: new Date(dto.dataHora),
       status: StatusPelada.ABERTA_INSCRICOES,
       configuracao: new ConfiguracaoPeladaEntity(),
@@ -50,14 +55,20 @@ export class PeladasService {
     const construtor = this.peladas
       .createQueryBuilder('pelada')
       .leftJoinAndSelect('pelada.local', 'local')
+      .leftJoinAndSelect('pelada.grupo', 'grupo')
       .leftJoinAndSelect('pelada.configuracao', 'configuracao')
       .where('pelada.organizadorId = :organizadorId', {
         organizadorId: usuarioId,
       });
 
     if (filtro.busca) {
-      construtor.andWhere('pelada.nome ILIKE :busca', {
+      construtor.andWhere('grupo.nome ILIKE :busca', {
         busca: `%${filtro.busca.trim().toLowerCase()}%`,
+      });
+    }
+    if (filtro.grupoId) {
+      construtor.andWhere('pelada.grupoId = :grupoId', {
+        grupoId: filtro.grupoId,
       });
     }
     if (filtro.status) {
@@ -96,7 +107,7 @@ export class PeladasService {
   async buscarPorId(usuarioId: string, id: string): Promise<PeladaEntity> {
     const pelada = await this.peladas.findOne({
       where: { id, organizadorId: usuarioId },
-      relations: ['configuracao', 'local', 'temporada'],
+      relations: ['configuracao', 'grupo', 'local', 'temporada'],
     });
     if (!pelada) {
       throw new NotFoundException('Pelada nao encontrada');
@@ -120,9 +131,6 @@ export class PeladasService {
         await this.garantirTemporadaDoOrganizador(usuarioId, dto.temporadaId);
       }
       pelada.temporadaId = dto.temporadaId ?? null;
-    }
-    if (dto.nome !== undefined) {
-      pelada.nome = dto.nome.trim();
     }
     if (dto.dataHora !== undefined) {
       pelada.dataHora = new Date(dto.dataHora);
@@ -162,6 +170,19 @@ export class PeladasService {
     if (!local) {
       throw new NotFoundException('Local nao encontrado');
     }
+  }
+
+  private async garantirGrupoDoOrganizador(
+    usuarioId: string,
+    grupoId: string,
+  ): Promise<GrupoPeladaEntity> {
+    const grupo = await this.grupos.findOne({
+      where: { id: grupoId, organizadorId: usuarioId },
+    });
+    if (!grupo) {
+      throw new NotFoundException('Pelada nao encontrada');
+    }
+    return grupo;
   }
 
   private async garantirTemporadaDoOrganizador(

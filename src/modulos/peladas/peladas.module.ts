@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfiguracaoPeladaEntity } from '../../banco/entidades/configuracao-pelada.entity';
+import { GrupoPeladaEntity } from '../../banco/entidades/grupo-pelada.entity';
 import { LocalPeladaEntity } from '../../banco/entidades/local-pelada.entity';
 import { PeladaEntity } from '../../banco/entidades/pelada.entity';
 import { JogadorEntity } from '../../banco/entidades/jogador.entity';
@@ -31,6 +32,7 @@ import { FilaService } from './fila.service';
   imports: [
     TypeOrmModule.forFeature([
       PeladaEntity,
+      GrupoPeladaEntity,
       ConfiguracaoPeladaEntity,
       LocalPeladaEntity,
       TemporadaEntity,

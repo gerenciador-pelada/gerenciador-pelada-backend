@@ -73,7 +73,7 @@ export class PeladasController {
   }
 
   @Post()
-  @ApiOperation({ summary: 'Cria uma pelada com a configuracao padrao' })
+  @ApiOperation({ summary: 'Agenda uma edicao com a configuracao padrao' })
   criar(
     @UsuarioAtual() usuario: UsuarioRequisicao,
     @Body() dto: CriarPeladaDto,
@@ -196,7 +196,7 @@ export class PeladasController {
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Atualiza nome, data, local ou temporada' })
+  @ApiOperation({ summary: 'Atualiza data, local ou temporada da edicao' })
   atualizar(
     @UsuarioAtual() usuario: UsuarioRequisicao,
     @Param('id', ParseUUIDPipe) id: string,

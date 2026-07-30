@@ -38,7 +38,7 @@ describe('PeladasController', () => {
 
   it('cria pelada para o usuario autenticado', () => {
     const dto = {
-      nome: 'Pelada',
+      grupoId: ID,
       dataHora: '2026-08-01T19:00:00-03:00',
       localId: ID,
     };
@@ -57,7 +57,7 @@ describe('PeladasController', () => {
   });
 
   it('busca e atualiza uma pelada pelo id', () => {
-    const dto = { nome: 'Novo nome' };
+    const dto = { dataHora: '2026-08-08T19:00:00-03:00' };
 
     void controller.buscar(USUARIO, ID);
     void controller.atualizar(USUARIO, ID, dto);

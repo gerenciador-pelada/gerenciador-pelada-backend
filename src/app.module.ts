@@ -5,6 +5,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { BancoModule } from './banco/banco.module';
 import { ThrottlerAtrasDeProxy } from './comum/guards/throttler-atras-de-proxy.guard';
 import { AutenticacaoModule } from './modulos/autenticacao/autenticacao.module';
+import { GruposPeladaModule } from './modulos/grupos-pelada/grupos-pelada.module';
 import { JogadoresModule } from './modulos/jogadores/jogadores.module';
 import { LocaisModule } from './modulos/locais/locais.module';
 import { PeladasModule } from './modulos/peladas/peladas.module';
@@ -19,6 +20,7 @@ import { UsuariosModule } from './modulos/usuarios/usuarios.module';
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
     BancoModule,
     AutenticacaoModule,
+    GruposPeladaModule,
     JogadoresModule,
     LocaisModule,
     PeladasModule,
