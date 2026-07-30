@@ -34,6 +34,7 @@ import { RankingsService } from './rankings.service';
 import { HistoricoService } from './historico.service';
 import { RegistrarEventoPartidaDto } from './dto/registrar-evento-partida.dto';
 import { FinalizarPartidaDto } from './dto/finalizar-partida.dto';
+import { DefinirGoleiroDto } from './dto/definir-goleiro.dto';
 import { PainelService } from './painel.service';
 
 @ApiTags('Peladas')
@@ -241,6 +242,24 @@ export class PeladasController {
     @Param('participanteId', ParseUUIDPipe) participanteId: string,
   ) {
     return this.participantes.desistir(u.id, id, participanteId);
+  }
+
+  @Patch(':id/times/:timeId/goleiro')
+  @ApiOperation({
+    summary: 'Define ou remove o goleiro do time, sem mexer na fila',
+  })
+  definirGoleiro(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('timeId', ParseUUIDPipe) timeId: string,
+    @Body() dto: DefinirGoleiroDto,
+  ) {
+    return this.participantes.definirGoleiro(
+      u.id,
+      id,
+      timeId,
+      dto.participanteId ?? null,
+    );
   }
 
   @Patch(':id/participantes/:participanteId/status')

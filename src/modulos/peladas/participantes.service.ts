@@ -231,6 +231,52 @@ export class ParticipantesService {
     return salvo;
   }
 
+  /**
+   * Define quem e o goleiro de um time, ou tira o goleiro.
+   *
+   * So mexe no elenco daquele time: nada entra nem sai da fila. E o caso da
+   * pelada sem goleiro fixo, em que o organizador combina na hora quem vai
+   * para o gol — e pode trocar a cada partida sem que isso afete a rotacao.
+   *
+   * `participanteId` nulo deixa o time sem goleiro.
+   */
+  async definirGoleiro(
+    usuarioId: string,
+    peladaId: string,
+    timeId: string,
+    participanteId: string | null,
+  ): Promise<JogadorTimeEntity[]> {
+    const pelada = await this.carregarPelada(usuarioId, peladaId);
+    this.garantirAberta(pelada);
+
+    const elenco = await this.jogadoresTime.find({
+      where: { timeId, ativo: true },
+    });
+    if (elenco.length === 0)
+      throw new NotFoundException('Time nao encontrado nesta pelada');
+
+    if (participanteId !== null) {
+      const membro = elenco.find((e) => e.participanteId === participanteId);
+      if (!membro)
+        throw new ErroRegraPelada(
+          'JOGADOR_FORA_DO_TIME',
+          'So quem esta no time pode ser o goleiro dele',
+        );
+    }
+
+    for (const membro of elenco) {
+      const deveSerGoleiro = membro.participanteId === participanteId;
+      if (membro.ehGoleiro !== deveSerGoleiro) {
+        await this.jogadoresTime.update(membro.id, {
+          ehGoleiro: deveSerGoleiro,
+        });
+        membro.ehGoleiro = deveSerGoleiro;
+      }
+    }
+
+    return elenco;
+  }
+
   private async buscarParticipante(
     peladaId: string,
     id: string,
