@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, Repository } from 'typeorm';
+import { DataSource, EntityManager, IsNull, Repository } from 'typeorm';
 import { ConfiguracaoPeladaEntity } from '../../banco/entidades/configuracao-pelada.entity';
 import { EventoPartidaEntity } from '../../banco/entidades/evento-partida.entity';
 import { FilaJogadorEntity } from '../../banco/entidades/fila-jogador.entity';
@@ -122,6 +122,125 @@ export class PartidasService {
       );
 
       return { partida, proximaPartida: proxima };
+    });
+  }
+
+  /**
+   * Troca um jogador em campo por outro da fila, com a partida rolando.
+   *
+   * Os dois contam como tendo jogado a partida: quem sai mantem a participacao
+   * (com saiuEm) e quem entra ganha a sua. Na pelada ninguem diz "joguei 40%
+   * dessa partida" — os dois recebem os pontos do resultado.
+   *
+   * Quem entra herda o papel exato, inclusive ehGoleiro: trocar o goleiro sem
+   * isso deixaria o time com dois de linha e o gol vazio. Quem sai vai para o
+   * fim da fila, porque acabou de jogar; se a intencao era ir embora, isso e
+   * desistencia, que e outra acao.
+   */
+  async substituir(
+    usuarioId: string,
+    partidaId: string,
+    saiId: string,
+    entraId: string,
+  ) {
+    const partida = await this.buscar(usuarioId, partidaId);
+    if (partida.status !== StatusPartida.EM_ANDAMENTO)
+      throw new ErroRegraPelada(
+        'PARTIDA_NAO_EM_ANDAMENTO',
+        'So da para substituir com a partida em andamento',
+      );
+    if (saiId === entraId)
+      throw new ErroRegraPelada(
+        'SUBSTITUICAO_INVALIDA',
+        'Escolha dois jogadores diferentes',
+      );
+
+    return this.fonteDados.transaction(async (gerenciador) => {
+      const participacaoSai = await gerenciador.findOne(
+        ParticipacaoPartidaEntity,
+        { where: { partidaId, participanteId: saiId, saiuEm: IsNull() } },
+      );
+      if (!participacaoSai)
+        throw new ErroRegraPelada(
+          'JOGADOR_FORA_DA_PARTIDA',
+          'Quem sai precisa estar em campo nesta partida',
+        );
+
+      const jaJoga = await gerenciador.findOne(ParticipacaoPartidaEntity, {
+        where: { partidaId, participanteId: entraId, saiuEm: IsNull() },
+      });
+      if (jaJoga)
+        throw new ErroRegraPelada(
+          'JOGADOR_JA_EM_CAMPO',
+          'Quem entra ja esta em campo nesta partida',
+        );
+
+      const membroSai = await gerenciador.findOne(JogadorTimeEntity, {
+        where: {
+          timeId: participacaoSai.timeId,
+          participanteId: saiId,
+          ativo: true,
+        },
+      });
+      const ehGoleiro = membroSai?.ehGoleiro ?? participacaoSai.ehGoleiro;
+
+      // Sai do time e da partida, guardando quando saiu.
+      const agora = new Date();
+      await gerenciador.update(ParticipacaoPartidaEntity, participacaoSai.id, {
+        saiuEm: agora,
+      });
+      if (membroSai) {
+        await gerenciador.update(JogadorTimeEntity, membroSai.id, {
+          ativo: false,
+          saiuEm: agora,
+        });
+      }
+
+      // Entra no time e na partida, herdando o papel.
+      await gerenciador.save(
+        gerenciador.create(JogadorTimeEntity, {
+          timeId: participacaoSai.timeId,
+          participanteId: entraId,
+          ehGoleiro,
+          ativo: true,
+          saiuEm: null,
+        }),
+      );
+      await gerenciador.save(
+        gerenciador.create(ParticipacaoPartidaEntity, {
+          partidaId,
+          participanteId: entraId,
+          timeId: participacaoSai.timeId,
+          ehGoleiro,
+          saiuEm: null,
+          minutosJogados: null,
+        }),
+      );
+
+      // Quem entrou sai da fila; quem saiu vai para o fim dela.
+      await gerenciador.update(
+        FilaJogadorEntity,
+        { peladaId: partida.peladaId, participanteId: entraId, ativo: true },
+        { ativo: false, saiuEm: agora },
+      );
+      const ultima = await gerenciador
+        .createQueryBuilder(FilaJogadorEntity, 'f')
+        .select('COALESCE(MAX(f.posicao), 0)', 'maximo')
+        .where('f.peladaId = :peladaId AND f.ativo = true', {
+          peladaId: partida.peladaId,
+        })
+        .getRawOne<{ maximo: string }>();
+      await gerenciador.save(
+        gerenciador.create(FilaJogadorEntity, {
+          peladaId: partida.peladaId,
+          participanteId: saiId,
+          posicao: Number(ultima?.maximo ?? 0) + 1,
+          ativo: true,
+          saiuEm: null,
+        }),
+      );
+
+      return { saiu: saiId, entrou: entraId, ehGoleiro };
     });
   }
 

@@ -35,6 +35,7 @@ import { HistoricoService } from './historico.service';
 import { RegistrarEventoPartidaDto } from './dto/registrar-evento-partida.dto';
 import { FinalizarPartidaDto } from './dto/finalizar-partida.dto';
 import { DefinirGoleiroDto } from './dto/definir-goleiro.dto';
+import { SubstituirJogadorDto } from './dto/substituir-jogador.dto';
 import { PainelService } from './painel.service';
 
 @ApiTags('Peladas')
@@ -98,6 +99,16 @@ export class PeladasController {
   ) {
     return this.partidas.cancelar(u.id, id);
   }
+  @Post('/partidas/:partidaId/substituicao')
+  @ApiOperation({ summary: 'Troca um jogador em campo por outro da fila' })
+  substituir(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('partidaId', ParseUUIDPipe) id: string,
+    @Body() dto: SubstituirJogadorDto,
+  ) {
+    return this.partidas.substituir(u.id, id, dto.saiId, dto.entraId);
+  }
+
   @Post('/partidas/:partidaId/eventos') registrarEvento(
     @UsuarioAtual() u: UsuarioRequisicao,
     @Param('partidaId', ParseUUIDPipe) id: string,
