@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, IsNull, Not, Repository } from 'typeorm';
 import { FilaJogadorEntity } from '../../banco/entidades/fila-jogador.entity';
 import { JogadorEntity } from '../../banco/entidades/jogador.entity';
+import { JogadorTimeEntity } from '../../banco/entidades/jogador-time.entity';
 import { ParticipantePeladaEntity } from '../../banco/entidades/participante-pelada.entity';
 import { PeladaEntity } from '../../banco/entidades/pelada.entity';
 import { MaquinaStatusPelada } from '../../dominio/pelada/maquina-status-pelada';
@@ -22,6 +23,8 @@ export class ParticipantesService {
     private readonly participantes: Repository<ParticipantePeladaEntity>,
     @InjectRepository(FilaJogadorEntity)
     private readonly fila: Repository<FilaJogadorEntity>,
+    @InjectRepository(JogadorTimeEntity)
+    private readonly jogadoresTime: Repository<JogadorTimeEntity>,
     private readonly fonteDados: DataSource,
   ) {}
   async adicionar(
@@ -140,6 +143,103 @@ export class ParticipantesService {
       }),
     );
   }
+  /**
+   * Saida temporaria: o jogador para um pouco mas continua na pelada.
+   *
+   * A vaga no time e guardada — JogadorTime segue ativo. E a diferenca em
+   * relacao a desistencia: quem descansa volta para o mesmo time, quem desiste
+   * perde a vaga para alguem da fila.
+   */
+  async pausar(
+    usuarioId: string,
+    peladaId: string,
+    id: string,
+  ): Promise<ParticipantePeladaEntity> {
+    const pelada = await this.carregarPelada(usuarioId, peladaId);
+    this.garantirAberta(pelada);
+    const p = await this.buscarParticipante(peladaId, id);
+
+    if (p.status === StatusParticipantePelada.DESISTIU)
+      throw new ErroRegraPelada(
+        'PARTICIPANTE_DESISTIU',
+        'Quem desistiu nao pode voltar a descansar',
+      );
+
+    p.status = StatusParticipantePelada.DESCANSANDO;
+    return this.participantes.save(p);
+  }
+
+  /** Volta de uma pausa, retomando a vaga que ficou guardada. */
+  async retornar(
+    usuarioId: string,
+    peladaId: string,
+    id: string,
+  ): Promise<ParticipantePeladaEntity> {
+    const pelada = await this.carregarPelada(usuarioId, peladaId);
+    this.garantirAberta(pelada);
+    const p = await this.buscarParticipante(peladaId, id);
+
+    if (p.status === StatusParticipantePelada.DESISTIU)
+      throw new ErroRegraPelada(
+        'PARTICIPANTE_DESISTIU',
+        'Quem desistiu precisa ser adicionado de novo',
+      );
+
+    const emTime = await this.jogadoresTime.findOne({
+      where: { participanteId: id, ativo: true },
+    });
+    p.status = emTime
+      ? StatusParticipantePelada.JOGANDO
+      : StatusParticipantePelada.PRESENTE;
+
+    // Quem voltou e nao tem time entra no fim da fila; quem tem, retoma a vaga.
+    const salvo = await this.participantes.save(p);
+    if (!emTime && pelada.status === StatusPelada.EM_ANDAMENTO) {
+      await this.enfileirar(peladaId, salvo);
+    }
+    return salvo;
+  }
+
+  /**
+   * Desistencia: o jogador sai da pelada de vez.
+   *
+   * Perde a vaga no time e sai da fila, mas o registro permanece — gols,
+   * assistencias e pontos ja marcados continuam valendo. O historico da pelada
+   * nao pode mentir sobre o que aconteceu.
+   */
+  async desistir(
+    usuarioId: string,
+    peladaId: string,
+    id: string,
+  ): Promise<ParticipantePeladaEntity> {
+    const pelada = await this.carregarPelada(usuarioId, peladaId);
+    this.garantirAberta(pelada);
+    const p = await this.buscarParticipante(peladaId, id);
+
+    p.status = StatusParticipantePelada.DESISTIU;
+    const salvo = await this.participantes.save(p);
+
+    await this.jogadoresTime.update(
+      { participanteId: id, ativo: true },
+      { ativo: false, saiuEm: new Date() },
+    );
+    await this.fila.update(
+      { peladaId, participanteId: id, ativo: true },
+      { ativo: false, saiuEm: new Date() },
+    );
+
+    return salvo;
+  }
+
+  private async buscarParticipante(
+    peladaId: string,
+    id: string,
+  ): Promise<ParticipantePeladaEntity> {
+    const p = await this.participantes.findOne({ where: { id, peladaId } });
+    if (!p) throw new NotFoundException('Participante nao encontrado');
+    return p;
+  }
+
   async alterarStatus(
     usuarioId: string,
     peladaId: string,

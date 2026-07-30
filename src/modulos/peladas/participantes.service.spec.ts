@@ -33,8 +33,10 @@ function criarServico(chegaram: Partial<ParticipantePeladaEntity>[]) {
     {
       findOne: jest.fn(),
       save: jest.fn(),
+      update: jest.fn(),
       createQueryBuilder: jest.fn(),
     } as never,
+    { findOne: jest.fn(), update: jest.fn() } as never,
     {
       transaction: (cb: (m: EntityManager) => Promise<unknown>) =>
         cb(gerenciador as unknown as EntityManager),

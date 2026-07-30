@@ -34,7 +34,19 @@ const PARTICIPANTES: Record<
   f2: { id: 'f2', ordemChegada: 6, ehGoleiroFixo: false },
 };
 
-function criarAmbiente() {
+function criarAmbiente(opcoes: { semGoleiroFixo?: boolean } = {}) {
+  const elenco = opcoes.semGoleiroFixo
+    ? ELENCO.filter((e) => !e.ehGoleiro)
+    : ELENCO;
+  const participantes = opcoes.semGoleiroFixo
+    ? Object.fromEntries(
+        Object.entries(PARTICIPANTES).map(([k, v]) => [
+          k,
+          { ...v, ehGoleiroFixo: false },
+        ]),
+      )
+    : PARTICIPANTES;
+
   const jogadoresTimeSalvos: JogadorTimeEntity[] = [];
   const filaSalva: FilaJogadorEntity[] = [];
   let proximoTime = 0;
@@ -72,7 +84,7 @@ function criarAmbiente() {
         const ids = Array.isArray(onde)
           ? onde.map((x) => x.timeId)
           : [onde.timeId];
-        return Promise.resolve(ELENCO.filter((e) => ids.includes(e.timeId)));
+        return Promise.resolve(elenco.filter((e) => ids.includes(e.timeId)));
       }
       if (entidade === FilaJogadorEntity) {
         return Promise.resolve([
@@ -84,7 +96,7 @@ function criarAmbiente() {
       const onde = o.where as { id: string }[] | undefined;
       if (Array.isArray(onde)) {
         return Promise.resolve(
-          onde.map((x) => PARTICIPANTES[x.id]).filter(Boolean),
+          onde.map((x) => participantes[x.id]).filter(Boolean),
         );
       }
       return Promise.resolve([]);
@@ -156,6 +168,25 @@ describe('Rotação com goleiro fixo', () => {
       (j) => j.ehGoleiro && j.timeId.startsWith('time-novo'),
     );
     expect(goleirosDoTimeNovo.map((j) => j.participanteId)).toContain('gkB');
+  });
+
+  it('sem goleiro fixo, o time so nao tem goleiro e a fila segue igual', async () => {
+    // Pelada sem goleiro fixo: ninguem e promovido, ninguem e puxado da fila
+    // para o gol. O time simplesmente joga sem goleiro fixo.
+    const { servico, jogadoresTimeSalvos, filaSalva } = criarAmbiente({
+      semGoleiroFixo: true,
+    });
+
+    await servico.finalizar(DONO, PARTIDA);
+
+    const doTimeNovo = jogadoresTimeSalvos.filter((j) =>
+      j.timeId.startsWith('time-novo'),
+    );
+    expect(doTimeNovo.every((j) => !j.ehGoleiro)).toBe(true);
+    expect(doTimeNovo.map((j) => j.participanteId)).toEqual(['f1', 'f2']);
+
+    // Os dois que perderam voltam para a fila, sem tratamento especial.
+    expect(filaSalva.map((f) => f.participanteId).sort()).toEqual(['b1', 'b2']);
   });
 
   it('não conta o goleiro fixo como vaga de jogador de linha', async () => {

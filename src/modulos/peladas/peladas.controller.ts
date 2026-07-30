@@ -213,6 +213,36 @@ export class PeladasController {
     return this.configuracoes.atualizar(usuario.id, id, dto);
   }
 
+  @Post(':id/participantes/:participanteId/pausar')
+  @ApiOperation({ summary: 'Saida temporaria, guardando a vaga no time' })
+  pausarParticipante(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('participanteId', ParseUUIDPipe) participanteId: string,
+  ) {
+    return this.participantes.pausar(u.id, id, participanteId);
+  }
+
+  @Post(':id/participantes/:participanteId/retornar')
+  @ApiOperation({ summary: 'Volta de uma pausa e retoma a vaga' })
+  retornarParticipante(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('participanteId', ParseUUIDPipe) participanteId: string,
+  ) {
+    return this.participantes.retornar(u.id, id, participanteId);
+  }
+
+  @Post(':id/participantes/:participanteId/desistir')
+  @ApiOperation({ summary: 'Sai da pelada de vez, liberando a vaga' })
+  desistirParticipante(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('participanteId', ParseUUIDPipe) participanteId: string,
+  ) {
+    return this.participantes.desistir(u.id, id, participanteId);
+  }
+
   @Patch(':id/participantes/:participanteId/status')
   alterarStatusParticipante(
     @UsuarioAtual() u: UsuarioRequisicao,
