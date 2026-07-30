@@ -1,5 +1,9 @@
+import { NotFoundException } from '@nestjs/common';
 import { DataSource, EntityManager } from 'typeorm';
+import { FilaJogadorEntity } from '../../banco/entidades/fila-jogador.entity';
+import { JogadorTimeEntity } from '../../banco/entidades/jogador-time.entity';
 import { ParticipantePeladaEntity } from '../../banco/entidades/participante-pelada.entity';
+import { StatusParticipantePelada } from '../../comum/enums/status-participante-pelada.enum';
 import { StatusPelada } from '../../comum/enums/status-pelada.enum';
 import { ErroRegraPelada } from '../../dominio/erros/erro-regra-pelada';
 import { ParticipantesService } from './participantes.service';
@@ -98,5 +102,220 @@ describe('ParticipantesService.reordenar', () => {
       servico.reordenar(DONO, PELADA, ['a', 'a', 'b']),
     ).rejects.toBeInstanceOf(ErroRegraPelada);
     expect(atualizacoes).toHaveLength(0);
+  });
+});
+
+interface OpcoesGoleiro {
+  participanteExiste?: boolean;
+  status?: StatusParticipantePelada;
+  ordemChegada?: number | null;
+  naFila?: boolean;
+  emTime?: boolean;
+  statusPelada?: StatusPelada;
+}
+
+function criarServicoGoleiro(
+  ehGoleiroFixo: boolean,
+  opcoes: OpcoesGoleiro = {},
+) {
+  const participante = {
+    id: 'participante-1',
+    peladaId: PELADA,
+    jogadorId: 'jogador-1',
+    ehGoleiroFixo,
+    status: opcoes.status ?? StatusParticipantePelada.AGUARDANDO,
+    ordemChegada: opcoes.ordemChegada === undefined ? 4 : opcoes.ordemChegada,
+  } as ParticipantePeladaEntity;
+  const fila = opcoes.naFila
+    ? [
+        {
+          id: 'fila-1',
+          peladaId: PELADA,
+          participanteId: participante.id,
+          posicao: 3,
+          ativo: true,
+          saiuEm: null,
+        },
+      ]
+    : [];
+  const novasEntradas: Partial<FilaJogadorEntity>[] = [];
+
+  const gerenciador = {
+    findOne: jest
+      .fn()
+      .mockImplementation(
+        (
+          entidade: object,
+          consulta: { where?: { participanteId?: string } },
+        ) => {
+          if (entidade === ParticipantePeladaEntity) {
+            return Promise.resolve(
+              opcoes.participanteExiste === false ? null : participante,
+            );
+          }
+          if (entidade === JogadorTimeEntity) {
+            return Promise.resolve(
+              opcoes.emTime
+                ? {
+                    id: 'jogador-time-1',
+                    participanteId: consulta.where?.participanteId,
+                    ativo: true,
+                  }
+                : null,
+            );
+          }
+          if (entidade === FilaJogadorEntity) {
+            return Promise.resolve(
+              fila.find(
+                (item) =>
+                  item.participanteId === consulta.where?.participanteId &&
+                  item.ativo,
+              ) ?? null,
+            );
+          }
+          return Promise.resolve(null);
+        },
+      ),
+    update: jest
+      .fn()
+      .mockImplementation(
+        (
+          entidade: object,
+          criterio: { participanteId?: string; ativo?: boolean },
+          dados: { ativo?: boolean; saiuEm?: Date },
+        ) => {
+          if (entidade === FilaJogadorEntity) {
+            for (const item of fila) {
+              if (
+                item.participanteId === criterio.participanteId &&
+                item.ativo === criterio.ativo
+              ) {
+                Object.assign(item, dados);
+              }
+            }
+          }
+          return Promise.resolve({});
+        },
+      ),
+    save: jest.fn().mockImplementation((registro: object) => {
+      if ('posicao' in registro) {
+        novasEntradas.push(registro as Partial<FilaJogadorEntity>);
+      }
+      return Promise.resolve(registro);
+    }),
+    create: jest.fn((_entidade: object, dados: object) => dados),
+    createQueryBuilder: jest.fn(() => ({
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      getRawOne: jest.fn().mockResolvedValue({ maximo: '5' }),
+    })),
+  };
+
+  const servico = new ParticipantesService(
+    {
+      findOne: jest.fn().mockResolvedValue({
+        id: PELADA,
+        status: opcoes.statusPelada ?? StatusPelada.EM_ANDAMENTO,
+        configuracao: { maximoJogadores: 20 },
+      }),
+    } as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {
+      transaction: (cb: (m: EntityManager) => Promise<unknown>) =>
+        cb(gerenciador as unknown as EntityManager),
+    } as unknown as DataSource,
+  );
+
+  return { servico, participante, fila, novasEntradas };
+}
+
+describe('ParticipantesService.alterarGoleiroFixo', () => {
+  it('marca como goleiro fixo e retira da fila de linha', async () => {
+    const { servico, participante, fila } = criarServicoGoleiro(false, {
+      naFila: true,
+    });
+
+    const atualizado = await servico.alterarGoleiroFixo(
+      DONO,
+      PELADA,
+      participante.id,
+      true,
+    );
+
+    expect(atualizado.ehGoleiroFixo).toBe(true);
+    expect(fila[0]).toMatchObject({
+      ativo: false,
+      saiuEm: expect.any(Date),
+    });
+  });
+
+  it('desmarca e coloca um jogador disponivel no fim da fila', async () => {
+    const { servico, participante, novasEntradas } = criarServicoGoleiro(true);
+
+    const atualizado = await servico.alterarGoleiroFixo(
+      DONO,
+      PELADA,
+      participante.id,
+      false,
+    );
+
+    expect(atualizado.ehGoleiroFixo).toBe(false);
+    expect(novasEntradas).toEqual([
+      expect.objectContaining({
+        peladaId: PELADA,
+        participanteId: participante.id,
+        posicao: 6,
+        ativo: true,
+        saiuEm: null,
+      }),
+    ]);
+  });
+
+  it('nao enfileira quem ainda nao chegou', async () => {
+    const { servico, participante, novasEntradas } = criarServicoGoleiro(true, {
+      status: StatusParticipantePelada.CONFIRMADO,
+      ordemChegada: null,
+    });
+
+    await servico.alterarGoleiroFixo(DONO, PELADA, participante.id, false);
+
+    expect(novasEntradas).toHaveLength(0);
+  });
+
+  it('nao enfileira quem pertence a um time ativo', async () => {
+    const { servico, participante, novasEntradas } = criarServicoGoleiro(true, {
+      emTime: true,
+    });
+
+    await servico.alterarGoleiroFixo(DONO, PELADA, participante.id, false);
+
+    expect(novasEntradas).toHaveLength(0);
+  });
+
+  it('repetir a classificacao atual nao altera a fila', async () => {
+    const { servico, participante, fila, novasEntradas } = criarServicoGoleiro(
+      true,
+      { naFila: true },
+    );
+
+    await servico.alterarGoleiroFixo(DONO, PELADA, participante.id, true);
+
+    expect(fila[0]).toMatchObject({ ativo: true, saiuEm: null });
+    expect(novasEntradas).toHaveLength(0);
+  });
+
+  it('recusa participante que nao pertence a pelada', async () => {
+    const { servico, participante } = criarServicoGoleiro(false, {
+      participanteExiste: false,
+    });
+
+    await expect(
+      servico.alterarGoleiroFixo(DONO, PELADA, participante.id, true),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });

@@ -45,6 +45,7 @@ import {
   EntrarNoLugarDeDto,
   ReordenarFilaDto,
 } from './dto/reordenar-fila.dto';
+import { AlterarGoleiroFixoDto } from './dto/alterar-goleiro-fixo.dto';
 
 @ApiTags('Peladas')
 @ApiBearerAuth()
@@ -321,6 +322,24 @@ export class PeladasController {
       id,
       participanteId,
       dto.status,
+    );
+  }
+
+  @Patch(':id/participantes/:participanteId/goleiro-fixo')
+  @ApiOperation({
+    summary: 'Marca ou desmarca um participante como goleiro fixo',
+  })
+  alterarGoleiroFixo(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('participanteId', ParseUUIDPipe) participanteId: string,
+    @Body() dto: AlterarGoleiroFixoDto,
+  ) {
+    return this.participantes.alterarGoleiroFixo(
+      u.id,
+      id,
+      participanteId,
+      dto.ehGoleiroFixo,
     );
   }
 

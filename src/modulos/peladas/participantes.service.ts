@@ -518,6 +518,87 @@ export class ParticipantesService {
     return p;
   }
 
+  /**
+   * Altera a classificacao do participante sem reescrever a partida atual.
+   *
+   * Goleiro fixo fica fora da fila dos jogadores de linha. Ao voltar a ser
+   * jogador de linha durante uma pelada, entra no fim da fila somente se ja
+   * chegou, esta disponivel e nao pertence a um time ativo.
+   */
+  async alterarGoleiroFixo(
+    usuarioId: string,
+    peladaId: string,
+    id: string,
+    ehGoleiroFixo: boolean,
+  ): Promise<ParticipantePeladaEntity> {
+    const pelada = await this.carregarPelada(usuarioId, peladaId);
+    this.garantirAberta(pelada);
+
+    return this.fonteDados.transaction(async (gerenciador) => {
+      const participante = await gerenciador.findOne(ParticipantePeladaEntity, {
+        where: { id, peladaId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!participante)
+        throw new NotFoundException('Participante nao encontrado');
+
+      // Alem de economizar escritas, preserva a fila se o cliente repetir uma
+      // requisicao cujo resultado ja foi confirmado pelo servidor.
+      if (participante.ehGoleiroFixo === ehGoleiroFixo) {
+        return participante;
+      }
+
+      participante.ehGoleiroFixo = ehGoleiroFixo;
+      await gerenciador.save(participante);
+
+      if (ehGoleiroFixo) {
+        await gerenciador.update(
+          FilaJogadorEntity,
+          { peladaId, participanteId: id, ativo: true },
+          { ativo: false, saiuEm: new Date() },
+        );
+        return participante;
+      }
+
+      const disponivelParaFila =
+        pelada.status === StatusPelada.EM_ANDAMENTO &&
+        participante.ordemChegada !== null &&
+        [
+          StatusParticipantePelada.PRESENTE,
+          StatusParticipantePelada.AGUARDANDO,
+        ].includes(participante.status);
+      if (!disponivelParaFila) return participante;
+
+      const [emTime, jaNaFila] = await Promise.all([
+        gerenciador.findOne(JogadorTimeEntity, {
+          where: { participanteId: id, ativo: true },
+        }),
+        gerenciador.findOne(FilaJogadorEntity, {
+          where: { peladaId, participanteId: id, ativo: true },
+        }),
+      ]);
+      if (emTime || jaNaFila) return participante;
+
+      const ultima = await gerenciador
+        .createQueryBuilder(FilaJogadorEntity, 'f')
+        .select('COALESCE(MAX(f.posicao), 0)', 'maximo')
+        .where('f.peladaId = :peladaId AND f.ativo = true', { peladaId })
+        .getRawOne<{ maximo: string }>();
+
+      await gerenciador.save(
+        gerenciador.create(FilaJogadorEntity, {
+          peladaId,
+          participanteId: id,
+          posicao: Number(ultima?.maximo ?? 0) + 1,
+          ativo: true,
+          saiuEm: null,
+        }),
+      );
+
+      return participante;
+    });
+  }
+
   async alterarStatus(
     usuarioId: string,
     peladaId: string,
