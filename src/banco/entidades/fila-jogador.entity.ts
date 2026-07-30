@@ -1,10 +1,13 @@
-import {
+﻿import {
+  JoinColumn,
+  ManyToOne,
   Column,
   CreateDateColumn,
   Entity,
   Index,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { ParticipantePeladaEntity } from './participante-pelada.entity';
 @Entity('fila_jogadores')
 @Index(['peladaId', 'participanteId'], {
   unique: true,
@@ -15,6 +18,9 @@ export class FilaJogadorEntity {
   @PrimaryGeneratedColumn('uuid') id: string;
   @Column({ type: 'uuid' }) peladaId: string;
   @Column({ type: 'uuid' }) participanteId: string;
+  @ManyToOne(() => ParticipantePeladaEntity, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'participante_id' })
+  participante: ParticipantePeladaEntity;
   @Column({ type: 'int' }) posicao: number;
   @CreateDateColumn({ type: 'timestamptz' }) entrouNaFilaEm: Date;
   @Column({ default: true }) ativo: boolean;
