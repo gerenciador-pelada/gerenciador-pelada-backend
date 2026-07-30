@@ -129,6 +129,12 @@ export class PainelService {
       })),
       totalPresentes: participantes.filter((p) => p.ordemChegada !== null)
         .length,
+      // Separado de propósito: o sorteio exige jogadores de LINHA, e contar
+      // goleiros fixos junto fazia a tela dizer "há 14 de 12" enquanto o
+      // sorteio recusava por falta de gente.
+      totalLinhaPresentes: participantes.filter(
+        (p) => p.ordemChegada !== null && !p.ehGoleiroFixo,
+      ).length,
     };
   }
 
