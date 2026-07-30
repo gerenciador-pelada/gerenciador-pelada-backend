@@ -13,6 +13,7 @@ import { StatusParticipantePelada } from '../../comum/enums/status-participante-
 import { StatusPelada } from '../../comum/enums/status-pelada.enum';
 import { StatusPartida } from '../../comum/enums/status-partida.enum';
 import { PartidaEntity } from '../../banco/entidades/partida.entity';
+import { ParticipacaoPartidaEntity } from '../../banco/entidades/participacao-partida.entity';
 
 @Injectable()
 export class ParticipantesService {
@@ -29,6 +30,8 @@ export class ParticipantesService {
     private readonly jogadoresTime: Repository<JogadorTimeEntity>,
     @InjectRepository(PartidaEntity)
     private readonly partidas: Repository<PartidaEntity>,
+    @InjectRepository(ParticipacaoPartidaEntity)
+    private readonly participacoes: Repository<ParticipacaoPartidaEntity>,
     private readonly fonteDados: DataSource,
   ) {}
   async adicionar(
@@ -390,16 +393,20 @@ export class ParticipantesService {
     if (!participante)
       throw new NotFoundException('Participante nao encontrado');
 
-    // Quem ja chegou tem participacoes, eventos e pontuacao apontando para ele.
-    // Nao ha FK nessas colunas, entao apagar nao cascateia: deixaria gols
-    // orfaos aparecendo como "Desconhecido" e o ranking contando pontos de
-    // alguem que sumiu. Nesse caso a saida correta e desistencia, que preserva
-    // o historico. A remocao fisica fica so para quem foi adicionado por engano
-    // e nunca apareceu.
-    if (participante.ordemChegada !== null) {
+    // A trava e ter JOGADO, nao ter chegado. Quem entrou em campo tem
+    // participacoes, eventos e pontuacao apontando para ele: apagar destruiria
+    // o historico das partidas, e a saida correta e a desistencia. Mas quem so
+    // foi cadastrado — inclusive quem chegou e ainda nao jogou — costuma ser
+    // nome digitado errado, e deve poder sumir da tela.
+    //
+    // A fila e o elenco saem junto por CASCADE nas chaves estrangeiras.
+    const jogou = await this.participacoes.count({
+      where: { participanteId: id },
+    });
+    if (jogou > 0) {
       throw new ErroRegraPelada(
-        'PARTICIPANTE_JA_CHEGOU',
-        'Quem ja chegou nao pode ser apagado: use desistencia para preservar o historico',
+        'PARTICIPANTE_JA_JOGOU',
+        'Quem ja entrou em campo nao pode ser apagado: use desistencia para preservar os gols e pontos dele',
       );
     }
 

@@ -62,6 +62,7 @@ function criarServico(opcoes: {
             : null,
         ),
     } as never,
+    { count: jest.fn().mockResolvedValue(0) } as never,
     {} as never,
   );
 

@@ -54,6 +54,7 @@ function criarServico(opcoes: {
     fila as never,
     jogadoresTime as never,
     { findOne: jest.fn().mockResolvedValue(null) } as never,
+    { count: jest.fn().mockResolvedValue(0) } as never,
     {} as never,
   );
 
