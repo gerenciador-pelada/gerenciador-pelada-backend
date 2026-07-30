@@ -63,8 +63,18 @@ describe('MotorPelada.empate sem criterio de desempate', () => {
   // empate informando o vencedor falhava com ESCOLHA_ADMIN_OBRIGATORIA.
   const zerados = () =>
     [
-      { id: 'casa', jogadores: [], partidasConsecutivas: 1, vitoriasConsecutivas: 0 },
-      { id: 'visitante', jogadores: [], partidasConsecutivas: 1, vitoriasConsecutivas: 0 },
+      {
+        id: 'casa',
+        jogadores: [],
+        partidasConsecutivas: 1,
+        vitoriasConsecutivas: 0,
+      },
+      {
+        id: 'visitante',
+        jogadores: [],
+        partidasConsecutivas: 1,
+        vitoriasConsecutivas: 0,
+      },
     ] as const;
 
   it('deduz quem sai a partir do vencedor escolhido', () => {
