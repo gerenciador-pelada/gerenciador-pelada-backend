@@ -70,6 +70,11 @@ a substituição.
 time que assume o lado dele o herda. As vagas de linha continuam sendo
 `jogadoresLinhaPorTime` — o goleiro vem além delas.
 
+O organizador pode alterar essa classificação depois da inclusão. Marcar
+remove a pessoa da fila de linha; desmarcar a coloca no fim da fila quando ela
+já chegou, está disponível e não está em um time. A escalação da partida atual
+não é reescrita.
+
 **Pausa e desistência são coisas distintas.** Quem descansa guarda a vaga no
 time; quem desiste a perde para alguém da fila.
 
