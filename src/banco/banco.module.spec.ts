@@ -44,7 +44,7 @@ describe('criarOpcoesBanco', () => {
       throw new Error('A configuracao de migrations deve ser uma lista');
     }
 
-    expect(migracoes).toHaveLength(15);
+    expect(migracoes).toHaveLength(16);
     expect(migracoes).toContain(AdicionarGoleirosAvulsosPartida1785427000000);
     expect(migracoes.every((migracao) => typeof migracao === 'function')).toBe(
       true,
