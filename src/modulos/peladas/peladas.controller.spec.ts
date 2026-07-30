@@ -13,15 +13,12 @@ describe('PeladasController', () => {
     remover: jest.fn(),
   };
   const configuracoes = { buscar: jest.fn(), atualizar: jest.fn() };
+  // Os demais servicos nao participam destes testes, mas o construtor precisa
+  // deles: a contagem tem que acompanhar PeladasController.
   const controller = new PeladasController(
     peladas as never,
     configuracoes as never,
-    {} as never,
-    {} as never,
-    {} as never,
-    {} as never,
-    {} as never,
-    {} as never,
+    ...Array.from({ length: 8 }, () => ({}) as never),
   );
 
   beforeEach(() => jest.resetAllMocks());

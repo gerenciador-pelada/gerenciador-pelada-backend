@@ -11,8 +11,14 @@ export class CriarFilaJogadores1785421000000 implements MigrationInterface {
     await q.query(
       `CREATE UNIQUE INDEX "uq_fila_posicao_ativa" ON "fila_jogadores" ("pelada_id", "posicao") WHERE "ativo" = true`,
     );
+    await q.query(
+      `ALTER TABLE "fila_jogadores" ADD CONSTRAINT "FK_825bdadb8a71695ebb26788c2ce" FOREIGN KEY ("participante_id") REFERENCES "participantes_pelada"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+    );
   }
   async down(q: QueryRunner): Promise<void> {
+    await q.query(
+      `ALTER TABLE "fila_jogadores" DROP CONSTRAINT "FK_825bdadb8a71695ebb26788c2ce"`,
+    );
     await q.query(`DROP TABLE "fila_jogadores"`);
   }
 }

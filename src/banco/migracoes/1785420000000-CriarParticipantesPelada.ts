@@ -19,9 +19,15 @@ export class CriarParticipantesPelada1785420000000 implements MigrationInterface
     await queryRunner.query(
       `ALTER TABLE "participantes_pelada" ADD CONSTRAINT "FK_participantes_pelada_jogador" FOREIGN KEY ("jogador_id") REFERENCES "jogadores"("id") ON DELETE RESTRICT`,
     );
+    await queryRunner.query(
+      `ALTER TABLE "jogadores_time" ADD CONSTRAINT "FK_3beb1cefc5e3f73702be0b0b735" FOREIGN KEY ("participante_id") REFERENCES "participantes_pelada"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+    );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(
+      `ALTER TABLE "jogadores_time" DROP CONSTRAINT "FK_3beb1cefc5e3f73702be0b0b735"`,
+    );
     await queryRunner.query(
       `ALTER TABLE "participantes_pelada" DROP CONSTRAINT "FK_participantes_pelada_jogador"`,
     );

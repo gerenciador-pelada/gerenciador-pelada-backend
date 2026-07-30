@@ -20,6 +20,7 @@ describe('Autenticacao (e2e)', () => {
     nome: 'Lucas Alexandre',
     email: 'lucas@pelada.com',
     senha: 'senhaSegura1',
+    convite: 'convite-de-teste',
   };
 
   it('cadastra, autentica e consulta o perfil', async () => {

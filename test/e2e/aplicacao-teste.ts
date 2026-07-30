@@ -15,12 +15,18 @@ export interface AplicacaoTeste {
 const TABELAS = ['temporadas', 'locais_pelada', 'jogadores', 'usuarios'];
 
 export async function criarAplicacaoTeste(): Promise<AplicacaoTeste> {
-  const modulo = await Test.createTestingModule({ imports: [AppModule] }).compile();
+  const modulo = await Test.createTestingModule({
+    imports: [AppModule],
+  }).compile();
 
   const app = modulo.createNestApplication();
   app.setGlobalPrefix('api');
   app.useGlobalPipes(
-    new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
   );
   app.useGlobalFilters(new FiltroExcecoesGlobal());
   app.useGlobalInterceptors(new InterceptadorResposta());

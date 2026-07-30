@@ -19,7 +19,12 @@ describe('Jogadores (e2e)', () => {
   async function autenticar(email: string): Promise<string> {
     const resposta = await request(ambiente.app.getHttpServer())
       .post('/api/autenticacao/cadastrar')
-      .send({ nome: 'Organizador', email, senha: 'senhaSegura1' })
+      .send({
+        nome: 'Organizador',
+        email,
+        senha: 'senhaSegura1',
+        convite: 'convite-de-teste',
+      })
       .expect(201);
     return resposta.body.dados.token as string;
   }

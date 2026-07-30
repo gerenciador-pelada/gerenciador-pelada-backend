@@ -1,4 +1,8 @@
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+﻿import {
+  ConflictException,
+  ForbiddenException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
@@ -17,8 +21,13 @@ describe('AutenticacaoService', () => {
   };
   const jwt = { signAsync: jest.fn() };
 
+  // O cadastro so abre com este codigo. Os testes de cadastro que nao estao
+  // testando o portao precisam passar por ele primeiro.
+  const CONVITE = 'convite-de-teste';
+
   beforeEach(async () => {
     jest.resetAllMocks();
+    process.env.CADASTRO_CONVITE = CONVITE;
     const modulo = await Test.createTestingModule({
       providers: [
         AutenticacaoService,
@@ -27,6 +36,58 @@ describe('AutenticacaoService', () => {
       ],
     }).compile();
     servico = modulo.get(AutenticacaoService);
+  });
+
+  // O cadastro cria um ORGANIZADOR. Se o portao cair, qualquer pessoa que
+  // alcance o endereco vira organizador — por isso ele tem teste proprio.
+  describe('cadastrar: portao de convite', () => {
+    const dados = {
+      nome: 'Lucas',
+      email: 'a@b.com',
+      senha: 'senhaSegura1',
+    };
+
+    it('recusa quando nao ha convite configurado — fechado por padrao', async () => {
+      delete process.env.CADASTRO_CONVITE;
+
+      await expect(
+        servico.cadastrar({ ...dados, convite: 'qualquer-coisa' }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+
+      expect(repositorio.save).not.toHaveBeenCalled();
+    });
+
+    it('recusa convite ausente', async () => {
+      await expect(servico.cadastrar(dados)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+
+      expect(repositorio.save).not.toHaveBeenCalled();
+    });
+
+    it('recusa convite errado', async () => {
+      await expect(
+        servico.cadastrar({ ...dados, convite: 'chute' }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+
+      expect(repositorio.save).not.toHaveBeenCalled();
+    });
+
+    it('recusa convite que so acerta o prefixo', async () => {
+      await expect(
+        servico.cadastrar({ ...dados, convite: CONVITE.slice(0, -1) }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+
+      expect(repositorio.save).not.toHaveBeenCalled();
+    });
+
+    it('recusa antes de tocar o banco — nao serve para descobrir e-mails', async () => {
+      await expect(
+        servico.cadastrar({ ...dados, convite: 'chute' }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+
+      expect(repositorio.findOne).not.toHaveBeenCalled();
+    });
   });
 
   describe('cadastrar', () => {
@@ -38,6 +99,7 @@ describe('AutenticacaoService', () => {
           nome: 'Lucas',
           email: 'a@b.com',
           senha: 'senhaSegura1',
+          convite: CONVITE,
         }),
       ).rejects.toBeInstanceOf(ConflictException);
 
@@ -58,6 +120,7 @@ describe('AutenticacaoService', () => {
         nome: 'Lucas',
         email: 'a@b.com',
         senha: 'senhaSegura1',
+        convite: CONVITE,
       });
 
       const salvo = repositorio.save.mock.calls[0][0] as UsuarioEntity;
@@ -81,6 +144,7 @@ describe('AutenticacaoService', () => {
         nome: 'Lucas',
         email: 'A@B.COM',
         senha: 'senhaSegura1',
+        convite: CONVITE,
       });
 
       expect((repositorio.save.mock.calls[0][0] as UsuarioEntity).email).toBe(

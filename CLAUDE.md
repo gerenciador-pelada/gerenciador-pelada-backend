@@ -36,9 +36,27 @@ escrito em código. Tudo vem de `ConfiguracaoPeladaEntity`.
 - `npm run migracao:gerar -- src/banco/migracoes/NomeDaMigracao`
 - `npm run migracao:rodar`  — aplica migrações pendentes
 
+## Segurança
+
+Quatro coisas falham fechado — se você mexer nelas, mexa com intenção:
+
+- **`JWT_SEGREDO`** — a API se recusa a subir com segredo de exemplo ou com
+  menos de 32 caracteres. Segredo conhecido = token de organizador forjável.
+  Exceção: `NODE_ENV=test`, que nunca atende a rede.
+- **`CORS_ORIGENS`** — lista fechada, separada por vírgula. Vazio significa
+  nenhuma origem externa, não todas. Nunca volte para `origin: true`.
+- **`CADASTRO_CONVITE`** — o cadastro cria ORGANIZADOR, então exige este
+  código. Vazio = cadastro fechado. Comparação em tempo constante.
+- **Rate limit** — 120 req/min global, 5/min em `entrar` e `cadastrar`.
+
+Gerar segredo e convite:
+
+    node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
+    node -e "console.log(require('crypto').randomBytes(6).toString('base64url'))"
+
 ## Primeiro administrador
 
-O endpoint publico de cadastro sempre cria ORGANIZADOR. Para promover a primeira conta:
+O endpoint de cadastro sempre cria ORGANIZADOR. Para promover a primeira conta:
 
     docker exec -it pelada-postgres psql -U pelada -d gerenciador_pelada \
       -c "UPDATE usuarios SET perfil = 'ADMINISTRADOR' WHERE email = 'seu@email.com';"

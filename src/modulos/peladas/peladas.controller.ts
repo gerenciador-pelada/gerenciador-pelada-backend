@@ -38,6 +38,12 @@ import { DefinirGoleiroDto } from './dto/definir-goleiro.dto';
 import { SubstituirJogadorDto } from './dto/substituir-jogador.dto';
 import { TrocarJogadoresDto } from './dto/trocar-jogadores.dto';
 import { PainelService } from './painel.service';
+import { FilaService } from './fila.service';
+import {
+  AdicionarNaFilaDto,
+  EntrarNoLugarDeDto,
+  ReordenarFilaDto,
+} from './dto/reordenar-fila.dto';
 
 @ApiTags('Peladas')
 @ApiBearerAuth()
@@ -53,6 +59,7 @@ export class PeladasController {
     private readonly rankings: RankingsService,
     private readonly historico: HistoricoService,
     private readonly painel: PainelService,
+    private readonly filaService: FilaService,
   ) {}
 
   @Get(':id/painel')
@@ -323,5 +330,54 @@ export class PeladasController {
     @Body() dto: ReordenarChegadaDto,
   ) {
     return this.participantes.reordenar(u.id, id, dto.participanteIds);
+  }
+
+  // A fila dos proximos e outra coisa que a ordem de chegada: depois que a
+  // pelada comeca, e a `posicao` da fila que decide quem entra.
+  @Patch(':id/fila')
+  @ApiOperation({ summary: 'Reordena a fila dos proximos' })
+  reordenarFila(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReordenarFilaDto,
+  ) {
+    return this.filaService.reordenar(u.id, id, dto.participanteIds);
+  }
+
+  @Post(':id/fila/:participanteId')
+  @ApiOperation({ summary: 'Coloca alguem na fila' })
+  adicionarNaFila(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('participanteId', ParseUUIDPipe) participanteId: string,
+    @Body() dto: AdicionarNaFilaDto,
+  ) {
+    return this.filaService.adicionar(u.id, id, participanteId, dto.posicao);
+  }
+
+  @Delete(':id/fila/:participanteId')
+  @ApiOperation({ summary: 'Tira alguem da fila' })
+  removerDaFila(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('participanteId', ParseUUIDPipe) participanteId: string,
+  ) {
+    return this.filaService.remover(u.id, id, participanteId);
+  }
+
+  @Post(':id/fila/:participanteId/entrar')
+  @ApiOperation({ summary: 'Poe alguem da fila no lugar de quem esta jogando' })
+  entrarNoLugarDe(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('participanteId', ParseUUIDPipe) participanteId: string,
+    @Body() dto: EntrarNoLugarDeDto,
+  ) {
+    return this.filaService.entrarNoLugarDe(
+      u.id,
+      id,
+      participanteId,
+      dto.saiId,
+    );
   }
 }

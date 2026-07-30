@@ -7,6 +7,7 @@ import {
   Post,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { Publico } from '../../comum/decoradores/publico.decorator';
 import {
   UsuarioAtual,
@@ -21,14 +22,20 @@ import { EntrarDto } from './dto/entrar.dto';
 export class AutenticacaoController {
   constructor(private readonly autenticacao: AutenticacaoService) {}
 
+  // As duas rotas abaixo sao as unicas que respondem sem token, entao sao as
+  // unicas onde alguem pode martelar tentativas. Limite bem mais apertado que
+  // o global: cinco por minuto atrapalha forca bruta e nao atrapalha ninguem
+  // que so errou a senha.
   @Publico()
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Post('cadastrar')
-  @ApiOperation({ summary: 'Cria uma conta de organizador' })
+  @ApiOperation({ summary: 'Cria uma conta de organizador (exige convite)' })
   cadastrar(@Body() dto: CadastrarDto) {
     return this.autenticacao.cadastrar(dto);
   }
 
   @Publico()
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Post('entrar')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Autentica e devolve o token JWT' })

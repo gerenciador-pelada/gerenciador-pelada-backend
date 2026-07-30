@@ -1,14 +1,17 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcryptjs';
+import { timingSafeEqual } from 'node:crypto';
 import { Repository } from 'typeorm';
 import { UsuarioEntity } from '../../banco/entidades/usuario.entity';
 import { PerfilUsuario } from '../../comum/enums/perfil-usuario.enum';
+import { lerConviteCadastro } from '../../configuracao/configuracao';
 import { CadastrarDto } from './dto/cadastrar.dto';
 import { EntrarDto } from './dto/entrar.dto';
 
@@ -35,6 +38,8 @@ export class AutenticacaoService {
   ) {}
 
   async cadastrar(dto: CadastrarDto): Promise<RespostaAutenticacao> {
+    this.exigirConvite(dto.convite);
+
     const email = dto.email.trim().toLowerCase();
 
     const existente = await this.usuarios.findOne({ where: { email } });
@@ -71,6 +76,33 @@ export class AutenticacaoService {
     }
 
     return this.montarResposta(usuario);
+  }
+
+  /**
+   * O cadastro cria um ORGANIZADOR, entao ele nao pode ficar aberto num
+   * endereco que estranhos alcancam. Sem CADASTRO_CONVITE configurado o
+   * cadastro fica fechado: negar por padrao, e nao liberar por esquecimento.
+   */
+  private exigirConvite(informado: string | undefined): void {
+    const esperado = lerConviteCadastro();
+
+    if (esperado === null) {
+      throw new ForbiddenException(
+        'Cadastro fechado. Peca ao organizador um codigo de convite.',
+      );
+    }
+
+    const recebido = Buffer.from(informado?.trim() ?? '', 'utf8');
+    const alvo = Buffer.from(esperado, 'utf8');
+
+    // Comparacao de tempo constante: `===` vaza o tamanho do prefixo correto
+    // pelo tempo de resposta, e o convite e adivinhavel caractere a caractere.
+    const confere =
+      recebido.length === alvo.length && timingSafeEqual(recebido, alvo);
+
+    if (!confere) {
+      throw new ForbiddenException('Codigo de convite invalido.');
+    }
   }
 
   protected async montarResposta(

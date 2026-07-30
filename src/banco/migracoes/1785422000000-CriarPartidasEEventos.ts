@@ -17,8 +17,38 @@ export class CriarPartidasEEventos1785422000000 implements MigrationInterface {
     await q.query(
       `CREATE TABLE "eventos_partida" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(),"partida_id" uuid NOT NULL,"tipo" "public"."eventos_partida_tipo_enum" NOT NULL,"participante_id" uuid NOT NULL,"participante_relacionado_id" uuid,"time_id" uuid NOT NULL,"minuto" integer,"registrado_por_id" uuid NOT NULL,"criado_em" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),"deletado_em" TIMESTAMP WITH TIME ZONE,CONSTRAINT "PK_eventos_partida" PRIMARY KEY("id"))`,
     );
+    await q.query(
+      `ALTER TABLE "participacoes_partida" ADD CONSTRAINT "FK_b985b4922d31134676b84311543" FOREIGN KEY ("partida_id") REFERENCES "partidas"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+    );
+    await q.query(
+      `ALTER TABLE "participacoes_partida" ADD CONSTRAINT "FK_a515f696e8fd16e464197f01151" FOREIGN KEY ("participante_id") REFERENCES "participantes_pelada"("id") ON DELETE RESTRICT ON UPDATE NO ACTION`,
+    );
+    await q.query(
+      `ALTER TABLE "participacoes_partida" ADD CONSTRAINT "FK_72fa00f309e73b6af2c56df3e0c" FOREIGN KEY ("time_id") REFERENCES "times"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+    );
+    await q.query(
+      `ALTER TABLE "eventos_partida" ADD CONSTRAINT "FK_ff48077d47e13820cf6b8e7773e" FOREIGN KEY ("partida_id") REFERENCES "partidas"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+    );
+    await q.query(
+      `ALTER TABLE "eventos_partida" ADD CONSTRAINT "FK_94d6fb9cba2ca46d8461b05eca7" FOREIGN KEY ("participante_id") REFERENCES "participantes_pelada"("id") ON DELETE RESTRICT ON UPDATE NO ACTION`,
+    );
   }
   async down(q: QueryRunner): Promise<void> {
+    await q.query(
+      `ALTER TABLE "eventos_partida" DROP CONSTRAINT "FK_94d6fb9cba2ca46d8461b05eca7"`,
+    );
+    await q.query(
+      `ALTER TABLE "eventos_partida" DROP CONSTRAINT "FK_ff48077d47e13820cf6b8e7773e"`,
+    );
+    await q.query(
+      `ALTER TABLE "participacoes_partida" DROP CONSTRAINT "FK_72fa00f309e73b6af2c56df3e0c"`,
+    );
+    await q.query(
+      `ALTER TABLE "participacoes_partida" DROP CONSTRAINT "FK_a515f696e8fd16e464197f01151"`,
+    );
+    await q.query(
+      `ALTER TABLE "participacoes_partida" DROP CONSTRAINT "FK_b985b4922d31134676b84311543"`,
+    );
     await q.query(`DROP TABLE "eventos_partida"`);
     await q.query(`DROP TABLE "participacoes_partida"`);
     await q.query(`DROP TABLE "partidas"`);
