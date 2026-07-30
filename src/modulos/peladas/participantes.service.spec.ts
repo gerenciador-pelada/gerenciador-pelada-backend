@@ -31,6 +31,11 @@ function criarServico(chegaram: Partial<ParticipantePeladaEntity>[]) {
     {} as never,
     { find: jest.fn().mockResolvedValue(chegaram) } as never,
     {
+      findOne: jest.fn(),
+      save: jest.fn(),
+      createQueryBuilder: jest.fn(),
+    } as never,
+    {
       transaction: (cb: (m: EntityManager) => Promise<unknown>) =>
         cb(gerenciador as unknown as EntityManager),
     } as unknown as DataSource,

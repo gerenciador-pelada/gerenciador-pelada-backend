@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, IsNull, Not, Repository } from 'typeorm';
+import { FilaJogadorEntity } from '../../banco/entidades/fila-jogador.entity';
 import { JogadorEntity } from '../../banco/entidades/jogador.entity';
 import { ParticipantePeladaEntity } from '../../banco/entidades/participante-pelada.entity';
 import { PeladaEntity } from '../../banco/entidades/pelada.entity';
@@ -8,6 +9,7 @@ import { MaquinaStatusPelada } from '../../dominio/pelada/maquina-status-pelada'
 import { ErroRegraPelada } from '../../dominio/erros/erro-regra-pelada';
 import { AdicionarParticipanteDto } from './dto/adicionar-participante.dto';
 import { StatusParticipantePelada } from '../../comum/enums/status-participante-pelada.enum';
+import { StatusPelada } from '../../comum/enums/status-pelada.enum';
 
 @Injectable()
 export class ParticipantesService {
@@ -18,6 +20,8 @@ export class ParticipantesService {
     private readonly jogadores: Repository<JogadorEntity>,
     @InjectRepository(ParticipantePeladaEntity)
     private readonly participantes: Repository<ParticipantePeladaEntity>,
+    @InjectRepository(FilaJogadorEntity)
+    private readonly fila: Repository<FilaJogadorEntity>,
     private readonly fonteDados: DataSource,
   ) {}
   async adicionar(
@@ -79,7 +83,8 @@ export class ParticipantesService {
     this.garantirAberta(pelada);
     const p = await this.participantes.findOne({ where: { id, peladaId } });
     if (!p) throw new NotFoundException('Participante nao encontrado');
-    if (p.ordemChegada === null) {
+    const primeiraChegada = p.ordemChegada === null;
+    if (primeiraChegada) {
       const ultimo = await this.participantes
         .createQueryBuilder('p')
         .select('COALESCE(MAX(p.ordemChegada), 0)', 'maximo')
@@ -89,7 +94,51 @@ export class ParticipantesService {
       p.chegadaEm = new Date();
     }
     p.status = StatusParticipantePelada.PRESENTE;
-    return this.participantes.save(p);
+    const salvo = await this.participantes.save(p);
+
+    // Chegou depois que a pelada comecou: entra no fim da fila agora.
+    // Sem isto a pessoa ficava PRESENTE mas fora de FilaJogador, e como a
+    // rotacao reconstroi a fila a partir de quem ja estava nela, ela nunca
+    // entrava em campo — sumia da pelada.
+    if (primeiraChegada && pelada.status === StatusPelada.EM_ANDAMENTO) {
+      await this.enfileirar(peladaId, salvo);
+    }
+
+    return salvo;
+  }
+
+  /**
+   * Coloca o participante no fim da fila, se ainda nao estiver nela.
+   *
+   * Goleiro fixo nao entra: pela regra da pelada ele fica no gol e fora da
+   * rotacao dos jogadores de linha.
+   */
+  private async enfileirar(
+    peladaId: string,
+    participante: ParticipantePeladaEntity,
+  ): Promise<void> {
+    if (participante.ehGoleiroFixo) return;
+
+    const jaNaFila = await this.fila.findOne({
+      where: { peladaId, participanteId: participante.id, ativo: true },
+    });
+    if (jaNaFila) return;
+
+    const ultima = await this.fila
+      .createQueryBuilder('f')
+      .select('COALESCE(MAX(f.posicao), 0)', 'maximo')
+      .where('f.peladaId = :peladaId AND f.ativo = true', { peladaId })
+      .getRawOne<{ maximo: string }>();
+
+    await this.fila.save(
+      this.fila.create({
+        peladaId,
+        participanteId: participante.id,
+        posicao: Number(ultima?.maximo ?? 0) + 1,
+        ativo: true,
+        saiuEm: null,
+      }),
+    );
   }
   async alterarStatus(
     usuarioId: string,
