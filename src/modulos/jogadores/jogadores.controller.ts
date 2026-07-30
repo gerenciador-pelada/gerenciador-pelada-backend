@@ -20,12 +20,16 @@ import { AtualizarJogadorDto } from './dto/atualizar-jogador.dto';
 import { CriarJogadorDto } from './dto/criar-jogador.dto';
 import { FiltrarJogadoresDto } from './dto/filtrar-jogadores.dto';
 import { JogadoresService } from './jogadores.service';
+import { PerfilJogadorService } from './perfil-jogador.service';
 
 @ApiTags('Jogadores')
 @ApiBearerAuth()
 @Controller('jogadores')
 export class JogadoresController {
-  constructor(private readonly jogadores: JogadoresService) {}
+  constructor(
+    private readonly jogadores: JogadoresService,
+    private readonly perfilJogador: PerfilJogadorService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: 'Cadastra um jogador' })
@@ -43,6 +47,15 @@ export class JogadoresController {
     @Query() filtro: FiltrarJogadoresDto,
   ) {
     return this.jogadores.listar(usuario.id, filtro);
+  }
+
+  @Get(':id/perfil')
+  @ApiOperation({ summary: 'Perfil com o historico consolidado do jogador' })
+  perfil(
+    @UsuarioAtual() usuario: UsuarioRequisicao,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.perfilJogador.montar(usuario.id, id);
   }
 
   @Get(':id')
