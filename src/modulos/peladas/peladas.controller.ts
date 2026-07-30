@@ -34,6 +34,7 @@ import { RankingsService } from './rankings.service';
 import { HistoricoService } from './historico.service';
 import { RegistrarEventoPartidaDto } from './dto/registrar-evento-partida.dto';
 import { FinalizarPartidaDto } from './dto/finalizar-partida.dto';
+import { FinalizarPeladaDto } from './dto/finalizar-pelada.dto';
 import { DefinirGoleiroDto } from './dto/definir-goleiro.dto';
 import { SubstituirJogadorDto } from './dto/substituir-jogador.dto';
 import { TrocarJogadoresDto } from './dto/trocar-jogadores.dto';
@@ -86,6 +87,16 @@ export class PeladasController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.sorteios.sortear(u.id, id);
+  }
+
+  @Post(':id/finalizar')
+  @ApiOperation({ summary: 'Finaliza a pelada e a partida atual atomicamente' })
+  finalizarPelada(
+    @UsuarioAtual() usuario: UsuarioRequisicao,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: FinalizarPeladaDto,
+  ) {
+    return this.partidas.finalizarPelada(usuario.id, id, dto);
   }
 
   @Post('/partidas/:partidaId/iniciar') iniciarPartida(

@@ -12,9 +12,15 @@ import { PeladaEntity } from '../../banco/entidades/pelada.entity';
 import { PontuacaoJogadorEntity } from '../../banco/entidades/pontuacao-jogador.entity';
 import { TimeEntity } from '../../banco/entidades/time.entity';
 import { StatusPartida } from '../../comum/enums/status-partida.enum';
+import { StatusPelada } from '../../comum/enums/status-pelada.enum';
 import { TipoEventoPartida } from '../../comum/enums/tipo-evento-partida.enum';
 import { ErroRegraPelada } from '../../dominio/erros/erro-regra-pelada';
 import { CalculadoraPontuacao } from '../../dominio/pelada/calculadora-pontuacao';
+import {
+  LadoPartida,
+  resolverResultadoFinal,
+} from '../../dominio/pelada/finalizacao-pelada';
+import { MaquinaStatusPelada } from '../../dominio/pelada/maquina-status-pelada';
 import {
   JogadorRotacao,
   MotorPelada,
@@ -24,6 +30,19 @@ import {
 interface FinalizarOpcoes {
   vencedorDecisao?: 'CASA' | 'VISITANTE';
   escolhaAdmin?: 'CASA' | 'VISITANTE';
+}
+
+export interface ResumoFinalizacaoPelada {
+  peladaId: string;
+  status: StatusPelada.FINALIZADA;
+  partidaFinalizada: {
+    id: string;
+    golsCasa: number;
+    golsVisitante: number;
+    vencedorDecisao: LadoPartida | null;
+  } | null;
+  partidasCanceladas: number;
+  jaEstavaFinalizada: boolean;
 }
 
 @Injectable()
@@ -107,10 +126,18 @@ export class PartidasService {
         );
       }
 
-      await this.pontuar(gerenciador, partida, configuracao, empatou);
+      const timeVencedorId = empatou
+        ? null
+        : partida.golsCasa > partida.golsVisitante
+          ? partida.timeCasaId
+          : partida.timeVisitanteId;
+      await this.pontuar(gerenciador, partida, configuracao, timeVencedorId);
 
       partida.status = StatusPartida.FINALIZADA;
       partida.finalizadaEm = new Date();
+      partida.vencedorDecisao = empatou
+        ? (opcoes.vencedorDecisao ?? null)
+        : null;
       await gerenciador.save(partida);
 
       const proxima = await this.rotacionar(
@@ -122,6 +149,87 @@ export class PartidasService {
       );
 
       return { partida, proximaPartida: proxima };
+    });
+  }
+
+  /**
+   * Encerra a pelada inteira em uma unica transacao.
+   *
+   * Diferente de `finalizar`, este fluxo nao rotaciona os times nem cria uma
+   * partida seguinte. O lock na pelada serializa tentativas concorrentes e
+   * torna uma repeticao depois de timeout segura.
+   */
+  async finalizarPelada(
+    usuarioId: string,
+    peladaId: string,
+    opcoes: Pick<FinalizarOpcoes, 'vencedorDecisao'> = {},
+  ): Promise<ResumoFinalizacaoPelada> {
+    return this.fonteDados.transaction(async (gerenciador) => {
+      const pelada = await gerenciador.findOne(PeladaEntity, {
+        where: { id: peladaId, organizadorId: usuarioId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!pelada) throw new NotFoundException('Pelada nao encontrada');
+
+      if (pelada.status === StatusPelada.FINALIZADA) {
+        return this.montarResumoFinalizado(gerenciador, peladaId);
+      }
+
+      MaquinaStatusPelada.garantirTransicao(
+        pelada.status,
+        StatusPelada.FINALIZADA,
+      );
+
+      const configuracao = await gerenciador.findOne(ConfiguracaoPeladaEntity, {
+        where: { peladaId },
+      });
+      if (!configuracao) {
+        throw new NotFoundException('Configuracao da pelada nao encontrada');
+      }
+
+      const partida = await gerenciador.findOne(PartidaEntity, {
+        where: { peladaId, status: StatusPartida.EM_ANDAMENTO },
+        order: { numero: 'DESC' },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (partida) {
+        const resultado = resolverResultadoFinal(
+          partida.golsCasa,
+          partida.golsVisitante,
+          configuracao.permiteEmpate,
+          configuracao.regraEmpate,
+          opcoes.vencedorDecisao,
+        );
+        const timeVencedorId =
+          resultado.vencedor === 'CASA'
+            ? partida.timeCasaId
+            : resultado.vencedor === 'VISITANTE'
+              ? partida.timeVisitanteId
+              : null;
+
+        await this.pontuar(gerenciador, partida, configuracao, timeVencedorId);
+        partida.status = StatusPartida.FINALIZADA;
+        partida.finalizadaEm = new Date();
+        partida.vencedorDecisao = resultado.vencedorPorDecisao;
+        await gerenciador.save(partida);
+      }
+
+      const cancelamento = await gerenciador.update(
+        PartidaEntity,
+        { peladaId, status: StatusPartida.AGUARDANDO },
+        { status: StatusPartida.CANCELADA },
+      );
+
+      pelada.status = StatusPelada.FINALIZADA;
+      await gerenciador.save(pelada);
+
+      return this.criarResumo(
+        peladaId,
+        partida,
+        cancelamento.affected ?? 0,
+        false,
+      );
     });
   }
 
@@ -260,7 +368,7 @@ export class PartidasService {
     gerenciador: EntityManager,
     partida: PartidaEntity,
     configuracao: ConfiguracaoPeladaEntity,
-    empatou: boolean,
+    timeVencedorId: string | null,
   ): Promise<void> {
     const participacoes = await gerenciador.find(ParticipacaoPartidaEntity, {
       where: { partidaId: partida.id },
@@ -277,23 +385,18 @@ export class PartidasService {
       participantes.map((p) => [p.id, p.jogadorId]),
     );
 
-    const timeVencedorId = empatou
-      ? null
-      : partida.golsCasa > partida.golsVisitante
-        ? partida.timeCasaId
-        : partida.timeVisitanteId;
-
     const contar = (participanteId: string, tipo: TipoEventoPartida) =>
       eventos.filter(
         (e) => e.participanteId === participanteId && e.tipo === tipo,
       ).length;
 
     const pontuacoes = participacoes.map((participacao) => {
-      const resultado = empatou
-        ? 'EMPATE'
-        : participacao.timeId === timeVencedorId
-          ? 'VITORIA'
-          : 'DERROTA';
+      const resultado =
+        timeVencedorId === null
+          ? 'EMPATE'
+          : participacao.timeId === timeVencedorId
+            ? 'VITORIA'
+            : 'DERROTA';
 
       const calculo = CalculadoraPontuacao.calcular(configuracao, {
         gols: contar(participacao.participanteId, TipoEventoPartida.GOL),
@@ -330,6 +433,39 @@ export class PartidasService {
 
     await gerenciador.delete(PontuacaoJogadorEntity, { partidaId: partida.id });
     await gerenciador.save(pontuacoes);
+  }
+
+  private criarResumo(
+    peladaId: string,
+    partida: PartidaEntity | null,
+    partidasCanceladas: number,
+    jaEstavaFinalizada: boolean,
+  ): ResumoFinalizacaoPelada {
+    return {
+      peladaId,
+      status: StatusPelada.FINALIZADA,
+      partidaFinalizada: partida
+        ? {
+            id: partida.id,
+            golsCasa: partida.golsCasa,
+            golsVisitante: partida.golsVisitante,
+            vencedorDecisao: partida.vencedorDecisao ?? null,
+          }
+        : null,
+      partidasCanceladas,
+      jaEstavaFinalizada,
+    };
+  }
+
+  private async montarResumoFinalizado(
+    gerenciador: EntityManager,
+    peladaId: string,
+  ): Promise<ResumoFinalizacaoPelada> {
+    const ultimaPartida = await gerenciador.findOne(PartidaEntity, {
+      where: { peladaId, status: StatusPartida.FINALIZADA },
+      order: { numero: 'DESC' },
+    });
+    return this.criarResumo(peladaId, ultimaPartida, 0, true);
   }
 
   /**

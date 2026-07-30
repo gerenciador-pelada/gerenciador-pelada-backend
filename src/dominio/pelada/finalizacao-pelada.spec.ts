@@ -4,9 +4,7 @@ import { resolverResultadoFinal } from './finalizacao-pelada';
 
 describe('resolverResultadoFinal', () => {
   it('resolve o vencedor pelo placar sem exigir uma decisao', () => {
-    expect(
-      resolverResultadoFinal(3, 1, true, RegraEmpate.AMBOS_SAEM),
-    ).toEqual({
+    expect(resolverResultadoFinal(3, 1, true, RegraEmpate.AMBOS_SAEM)).toEqual({
       empatouNoPlacar: false,
       vencedor: 'CASA',
       vencedorPorDecisao: null,
@@ -22,9 +20,7 @@ describe('resolverResultadoFinal', () => {
   });
 
   it('preserva o empate quando ele e permitido', () => {
-    expect(
-      resolverResultadoFinal(2, 2, true, RegraEmpate.AMBOS_SAEM),
-    ).toEqual({
+    expect(resolverResultadoFinal(2, 2, true, RegraEmpate.AMBOS_SAEM)).toEqual({
       empatouNoPlacar: true,
       vencedor: null,
       vencedorPorDecisao: null,
@@ -43,25 +39,21 @@ describe('resolverResultadoFinal', () => {
   ])(
     'exige vencedor no empate com permiteEmpate=$permiteEmpate e regra=$regraEmpate',
     ({ permiteEmpate, regraEmpate }) => {
-      expect(() =>
-        resolverResultadoFinal(1, 1, permiteEmpate, regraEmpate),
-      ).toThrow(
-        expect.objectContaining<Partial<ErroRegraPelada>>({
-          codigo: 'VENCEDOR_FINAL_OBRIGATORIO',
-        }),
-      );
+      try {
+        resolverResultadoFinal(1, 1, permiteEmpate, regraEmpate);
+        fail('A finalizacao deveria exigir um vencedor');
+      } catch (erro) {
+        expect(erro).toBeInstanceOf(ErroRegraPelada);
+        expect((erro as ErroRegraPelada).codigo).toBe(
+          'VENCEDOR_FINAL_OBRIGATORIO',
+        );
+      }
     },
   );
 
   it('mantem o placar empatado e registra o visitante como vencedor da decisao', () => {
     expect(
-      resolverResultadoFinal(
-        1,
-        1,
-        false,
-        RegraEmpate.AMBOS_SAEM,
-        'VISITANTE',
-      ),
+      resolverResultadoFinal(1, 1, false, RegraEmpate.AMBOS_SAEM, 'VISITANTE'),
     ).toEqual({
       empatouNoPlacar: true,
       vencedor: 'VISITANTE',

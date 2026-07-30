@@ -13,12 +13,25 @@ describe('PeladasController', () => {
     remover: jest.fn(),
   };
   const configuracoes = { buscar: jest.fn(), atualizar: jest.fn() };
-  // Os demais servicos nao participam destes testes, mas o construtor precisa
-  // deles: a contagem tem que acompanhar PeladasController.
+  const participantes = {};
+  const sorteios = {};
+  const partidas = { finalizarPelada: jest.fn() };
+  const eventos = {};
+  const rankings = {};
+  const historico = {};
+  const painel = {};
+  const fila = {};
   const controller = new PeladasController(
     peladas as never,
     configuracoes as never,
-    ...Array.from({ length: 8 }, () => ({}) as never),
+    participantes as never,
+    sorteios as never,
+    partidas as never,
+    eventos as never,
+    rankings as never,
+    historico as never,
+    painel as never,
+    fila as never,
   );
 
   beforeEach(() => jest.resetAllMocks());
@@ -75,5 +88,13 @@ describe('PeladasController', () => {
 
     expect(configuracoes.buscar).toHaveBeenCalledWith(USUARIO.id, ID);
     expect(configuracoes.atualizar).toHaveBeenCalledWith(USUARIO.id, ID, dto);
+  });
+
+  it('finaliza a pelada autenticada com eventual vencedor da decisao', () => {
+    const dto = { vencedorDecisao: 'CASA' as const };
+
+    void controller.finalizarPelada(USUARIO as never, ID, dto);
+
+    expect(partidas.finalizarPelada).toHaveBeenCalledWith(USUARIO.id, ID, dto);
   });
 });

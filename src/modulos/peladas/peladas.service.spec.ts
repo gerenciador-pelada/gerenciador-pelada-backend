@@ -110,6 +110,20 @@ describe('PeladasService', () => {
   });
 
   describe('alterarStatus', () => {
+    it('recusa finalizar pelo atalho generico de status', async () => {
+      peladas.findOne.mockResolvedValue({
+        id: 'pelada-1',
+        status: StatusPelada.EM_ANDAMENTO,
+      });
+
+      await expect(
+        servico.alterarStatus(DONO, 'pelada-1', StatusPelada.FINALIZADA),
+      ).rejects.toMatchObject<Partial<ErroRegraPelada>>({
+        codigo: 'FINALIZACAO_EXIGE_OPERACAO_DEDICADA',
+      });
+      expect(peladas.save).not.toHaveBeenCalled();
+    });
+
     it('recusa transicao invalida com ErroRegraPelada', async () => {
       peladas.findOne.mockResolvedValue({
         id: 'pelada-1',

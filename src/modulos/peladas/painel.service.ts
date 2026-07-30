@@ -9,6 +9,7 @@ import { PartidaEntity } from '../../banco/entidades/partida.entity';
 import { PeladaEntity } from '../../banco/entidades/pelada.entity';
 import { TimeEntity } from '../../banco/entidades/time.entity';
 import { StatusPartida } from '../../comum/enums/status-partida.enum';
+import { StatusPelada } from '../../comum/enums/status-pelada.enum';
 
 export interface JogadorPainel {
   participanteId: string;
@@ -73,13 +74,22 @@ export class PainelService {
       order: { numero: 'ASC' },
     });
 
-    const times = partidaAtual
-      ? await this.montarTimes(partidaAtual, porParticipante)
+    const ultimaPartida =
+      pelada.status === StatusPelada.FINALIZADA
+        ? await this.partidas.findOne({
+            where: { peladaId, status: StatusPartida.FINALIZADA },
+            order: { numero: 'DESC' },
+          })
+        : null;
+    const partidaDeReferencia = partidaAtual ?? ultimaPartida;
+
+    const times = partidaDeReferencia
+      ? await this.montarTimes(partidaDeReferencia, porParticipante)
       : { casa: null, visitante: null };
 
-    const eventos = partidaAtual
+    const eventos = partidaDeReferencia
       ? await this.eventos.find({
-          where: { partidaId: partidaAtual.id },
+          where: { partidaId: partidaDeReferencia.id },
           order: { criadoEm: 'DESC' },
           take: 10,
         })
@@ -99,17 +109,11 @@ export class PainelService {
         jogadoresLinhaPorTime: pelada.configuracao.jogadoresLinhaPorTime,
         duracaoPartidaMinutos: pelada.configuracao.duracaoPartidaMinutos,
         maximoGols: pelada.configuracao.maximoGols,
+        permiteEmpate: pelada.configuracao.permiteEmpate,
+        regraEmpate: pelada.configuracao.regraEmpate,
       },
-      partidaAtual: partidaAtual
-        ? {
-            id: partidaAtual.id,
-            numero: partidaAtual.numero,
-            status: partidaAtual.status,
-            golsCasa: partidaAtual.golsCasa,
-            golsVisitante: partidaAtual.golsVisitante,
-            iniciadaEm: partidaAtual.iniciadaEm,
-          }
-        : null,
+      partidaAtual: this.mapearPartida(partidaAtual),
+      ultimaPartida: this.mapearPartida(ultimaPartida),
       timeCasa: times.casa,
       timeVisitante: times.visitante,
       fila: registrosFila.map((f) =>
@@ -135,6 +139,20 @@ export class PainelService {
       totalLinhaPresentes: participantes.filter(
         (p) => p.ordemChegada !== null && !p.ehGoleiroFixo,
       ).length,
+    };
+  }
+
+  private mapearPartida(partida: PartidaEntity | null) {
+    if (!partida) return null;
+    return {
+      id: partida.id,
+      numero: partida.numero,
+      status: partida.status,
+      golsCasa: partida.golsCasa,
+      golsVisitante: partida.golsVisitante,
+      iniciadaEm: partida.iniciadaEm,
+      finalizadaEm: partida.finalizadaEm,
+      vencedorDecisao: partida.vencedorDecisao ?? null,
     };
   }
 

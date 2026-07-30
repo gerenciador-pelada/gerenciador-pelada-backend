@@ -7,6 +7,7 @@ import { PeladaEntity } from '../../banco/entidades/pelada.entity';
 import { TemporadaEntity } from '../../banco/entidades/temporada.entity';
 import { ResultadoPaginado } from '../../comum/dto/resultado-paginado';
 import { StatusPelada } from '../../comum/enums/status-pelada.enum';
+import { ErroRegraPelada } from '../../dominio/erros/erro-regra-pelada';
 import { MaquinaStatusPelada } from '../../dominio/pelada/maquina-status-pelada';
 import { AtualizarPeladaDto } from './dto/atualizar-pelada.dto';
 import { CriarPeladaDto } from './dto/criar-pelada.dto';
@@ -136,6 +137,12 @@ export class PeladasService {
     status: StatusPelada,
   ): Promise<PeladaEntity> {
     const pelada = await this.buscarPorId(usuarioId, id);
+    if (status === StatusPelada.FINALIZADA) {
+      throw new ErroRegraPelada(
+        'FINALIZACAO_EXIGE_OPERACAO_DEDICADA',
+        'Use a finalizacao da pelada para encerrar partidas e pontuacao',
+      );
+    }
     MaquinaStatusPelada.garantirTransicao(pelada.status, status);
     pelada.status = status;
     return this.peladas.save(pelada);
