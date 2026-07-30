@@ -53,6 +53,7 @@ function criarServico(opcoes: {
     participantes as never,
     fila as never,
     jogadoresTime as never,
+    { findOne: jest.fn().mockResolvedValue(null) } as never,
     {} as never,
   );
 

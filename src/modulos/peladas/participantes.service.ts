@@ -11,6 +11,8 @@ import { ErroRegraPelada } from '../../dominio/erros/erro-regra-pelada';
 import { AdicionarParticipanteDto } from './dto/adicionar-participante.dto';
 import { StatusParticipantePelada } from '../../comum/enums/status-participante-pelada.enum';
 import { StatusPelada } from '../../comum/enums/status-pelada.enum';
+import { StatusPartida } from '../../comum/enums/status-partida.enum';
+import { PartidaEntity } from '../../banco/entidades/partida.entity';
 
 @Injectable()
 export class ParticipantesService {
@@ -25,6 +27,8 @@ export class ParticipantesService {
     private readonly fila: Repository<FilaJogadorEntity>,
     @InjectRepository(JogadorTimeEntity)
     private readonly jogadoresTime: Repository<JogadorTimeEntity>,
+    @InjectRepository(PartidaEntity)
+    private readonly partidas: Repository<PartidaEntity>,
     private readonly fonteDados: DataSource,
   ) {}
   async adicionar(
@@ -275,6 +279,77 @@ export class ParticipantesService {
     }
 
     return elenco;
+  }
+
+  /**
+   * Troca dois jogadores de lado antes da partida comecar.
+   *
+   * So vale enquanto ninguem apitou: com a partida em andamento existe
+   * ParticipacaoPartida, e mexer no elenco por fora deixaria o registro do jogo
+   * mentindo sobre quem jogou onde. Depois de iniciada, a via e a substituicao.
+   *
+   * Nao mexe na fila: os dois ja estao escalados, so trocam de time. O papel de
+   * goleiro fica com o time, nao com a pessoa — quem assume a vaga do goleiro
+   * assume o gol.
+   */
+  async trocarJogadoresDeTime(
+    usuarioId: string,
+    peladaId: string,
+    participanteA: string,
+    participanteB: string,
+  ): Promise<JogadorTimeEntity[]> {
+    const pelada = await this.carregarPelada(usuarioId, peladaId);
+    this.garantirAberta(pelada);
+
+    if (participanteA === participanteB)
+      throw new ErroRegraPelada(
+        'TROCA_INVALIDA',
+        'Escolha dois jogadores diferentes',
+      );
+
+    const emAndamento = await this.partidas.findOne({
+      where: { peladaId, status: StatusPartida.EM_ANDAMENTO },
+    });
+    if (emAndamento)
+      throw new ErroRegraPelada(
+        'PARTIDA_JA_INICIADA',
+        'A partida ja comecou: use substituicao para trocar jogadores',
+      );
+
+    const [a, b] = await Promise.all([
+      this.jogadoresTime.findOne({
+        where: { participanteId: participanteA, ativo: true },
+      }),
+      this.jogadoresTime.findOne({
+        where: { participanteId: participanteB, ativo: true },
+      }),
+    ]);
+    if (!a || !b)
+      throw new ErroRegraPelada(
+        'JOGADOR_SEM_TIME',
+        'Os dois precisam estar escalados em algum time',
+      );
+    if (a.timeId === b.timeId)
+      throw new ErroRegraPelada('MESMO_TIME', 'Os dois ja estao no mesmo time');
+
+    // O papel de goleiro pertence a vaga: quem vai para o lugar do goleiro
+    // assume o gol, e vice-versa.
+    const [timeA, goleiroA] = [a.timeId, a.ehGoleiro];
+    await this.jogadoresTime.update(a.id, {
+      timeId: b.timeId,
+      ehGoleiro: b.ehGoleiro,
+    });
+    await this.jogadoresTime.update(b.id, {
+      timeId: timeA,
+      ehGoleiro: goleiroA,
+    });
+
+    return this.jogadoresTime.find({
+      where: [
+        { timeId: timeA, ativo: true },
+        { timeId: b.timeId, ativo: true },
+      ],
+    });
   }
 
   private async buscarParticipante(

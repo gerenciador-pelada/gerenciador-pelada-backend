@@ -36,6 +36,7 @@ import { RegistrarEventoPartidaDto } from './dto/registrar-evento-partida.dto';
 import { FinalizarPartidaDto } from './dto/finalizar-partida.dto';
 import { DefinirGoleiroDto } from './dto/definir-goleiro.dto';
 import { SubstituirJogadorDto } from './dto/substituir-jogador.dto';
+import { TrocarJogadoresDto } from './dto/trocar-jogadores.dto';
 import { PainelService } from './painel.service';
 
 @ApiTags('Peladas')
@@ -253,6 +254,23 @@ export class PeladasController {
     @Param('participanteId', ParseUUIDPipe) participanteId: string,
   ) {
     return this.participantes.desistir(u.id, id, participanteId);
+  }
+
+  @Post(':id/trocar-jogadores')
+  @ApiOperation({
+    summary: 'Troca dois jogadores de time antes da partida comecar',
+  })
+  trocarJogadores(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: TrocarJogadoresDto,
+  ) {
+    return this.participantes.trocarJogadoresDeTime(
+      u.id,
+      id,
+      dto.participanteA,
+      dto.participanteB,
+    );
   }
 
   @Patch(':id/times/:timeId/goleiro')
