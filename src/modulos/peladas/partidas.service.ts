@@ -650,12 +650,23 @@ export class PartidasService {
       });
     }
 
+    // Quem ja esperava mantem a posicao que tinha; quem sai de campo entra
+    // atras de todos eles.
+    //
+    // Antes isto reordenava a fila inteira por `ordemChegada`, o que anulava
+    // a espera: quem chegou cedo voltava para a frente por mais recente que
+    // tivesse jogado, e quem chegou tarde ficava preso no fim para sempre —
+    // o grupo "depois deles" nunca entrava. A fila e uma fila: o que da a vez
+    // e ha quanto tempo a pessoa esta parada, nao a que horas ela chegou.
+    //
+    // `ordemChegada` continua valendo, mas so para desempatar entre os que
+    // saem juntos do mesmo time.
     const sobra = [
       ...fila.slice(daFila.length),
-      ...jogadoresQueSaem.filter(
-        (j) => !complemento.some((c) => c.id === j.id),
-      ),
-    ].sort((a, b) => a.ordemChegada - b.ordemChegada);
+      ...jogadoresQueSaem
+        .filter((j) => !complemento.some((c) => c.id === j.id))
+        .sort((a, b) => a.ordemChegada - b.ordemChegada),
+    ];
 
     await gerenciador.delete(FilaJogadorEntity, { peladaId: partida.peladaId });
     if (sobra.length) {
