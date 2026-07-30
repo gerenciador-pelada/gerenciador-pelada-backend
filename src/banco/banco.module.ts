@@ -1,8 +1,8 @@
-import { join } from 'node:path';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
 import { lerConfiguracaoBanco } from '../configuracao/configuracao';
+import { MIGRACOES } from './migracoes';
 
 export function criarOpcoesBanco(): TypeOrmModuleOptions {
   const banco = lerConfiguracaoBanco();
@@ -14,7 +14,7 @@ export function criarOpcoesBanco(): TypeOrmModuleOptions {
     password: banco.senha,
     database: banco.nome,
     autoLoadEntities: true,
-    migrations: [join(__dirname, 'migracoes', '*{.ts,.js}')],
+    migrations: MIGRACOES,
     migrationsRun: true,
     namingStrategy: new SnakeNamingStrategy(),
     synchronize: false,

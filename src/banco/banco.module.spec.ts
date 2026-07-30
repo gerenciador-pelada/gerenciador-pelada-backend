@@ -1,4 +1,5 @@
 import { criarOpcoesBanco } from './banco.module';
+import { AdicionarGoleirosAvulsosPartida1785427000000 } from './migracoes/1785427000000-AdicionarGoleirosAvulsosPartida';
 
 const ambienteBanco = {
   BANCO_HOST: 'localhost',
@@ -33,5 +34,20 @@ describe('criarOpcoesBanco', () => {
 
     expect(opcoes.migrationsRun).toBe(true);
     expect(opcoes.synchronize).toBe(false);
+  });
+
+  it('empacota todas as migrations como dependencias estaticas', () => {
+    const migracoes = criarOpcoesBanco().migrations;
+
+    expect(Array.isArray(migracoes)).toBe(true);
+    if (!Array.isArray(migracoes)) {
+      throw new Error('A configuracao de migrations deve ser uma lista');
+    }
+
+    expect(migracoes).toHaveLength(15);
+    expect(migracoes).toContain(AdicionarGoleirosAvulsosPartida1785427000000);
+    expect(migracoes.every((migracao) => typeof migracao === 'function')).toBe(
+      true,
+    );
   });
 });

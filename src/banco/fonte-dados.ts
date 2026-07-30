@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { DataSource } from 'typeorm';
 import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
 import { lerConfiguracaoBanco } from '../configuracao/configuracao';
+import { MIGRACOES } from './migracoes';
 
 const banco = lerConfiguracaoBanco();
 
@@ -13,7 +14,7 @@ export const fonteDados = new DataSource({
   password: banco.senha,
   database: banco.nome,
   entities: ['src/banco/entidades/*.entity.ts'],
-  migrations: ['src/banco/migracoes/*.ts'],
+  migrations: MIGRACOES,
   namingStrategy: new SnakeNamingStrategy(),
   synchronize: false,
 });
