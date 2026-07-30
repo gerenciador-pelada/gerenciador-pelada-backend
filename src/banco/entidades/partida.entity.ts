@@ -23,6 +23,8 @@ export class PartidaEntity {
   status: StatusPartida;
   @Column({ type: 'timestamptz', nullable: true }) iniciadaEm: Date | null;
   @Column({ type: 'timestamptz', nullable: true }) finalizadaEm: Date | null;
+  @Column({ type: 'varchar', length: 10, nullable: true })
+  vencedorDecisao: 'CASA' | 'VISITANTE' | null;
   @CreateDateColumn({ type: 'timestamptz' }) criadoEm: Date;
   @UpdateDateColumn({ type: 'timestamptz' }) atualizadoEm: Date;
 }
