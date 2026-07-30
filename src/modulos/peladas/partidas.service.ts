@@ -224,10 +224,16 @@ export class PartidasService {
     empatou: boolean,
     opcoes: FinalizarOpcoes,
   ): Promise<PartidaEntity | null> {
-    const casa = await this.montarTimeRotacao(gerenciador, partida.timeCasaId);
+    const goleirosPorTime = new Map<string, string[]>();
+    const casa = await this.montarTimeRotacao(
+      gerenciador,
+      partida.timeCasaId,
+      goleirosPorTime,
+    );
     const visitante = await this.montarTimeRotacao(
       gerenciador,
       partida.timeVisitanteId,
+      goleirosPorTime,
     );
     const fila = await this.montarFila(gerenciador, partida.peladaId);
 
@@ -244,6 +250,11 @@ export class PartidasService {
     const permanece = [casa, visitante].find(
       (t) => !saem.some((s) => s.id === t.id),
     );
+
+    // Goleiro fixo nao entra na rotacao: ele fica no gol e o time que assume o
+    // lado dele herda o goleiro. Sem isto o goleiro era dissolvido junto com o
+    // time perdedor e caia na fila como jogador de linha.
+    const goleirosLiberados = saem.map((t) => goleirosPorTime.get(t.id) ?? []);
 
     const jogadoresQueSaem = saem.flatMap((t) => t.jogadores);
     const tamanhoTime = configuracao.jogadoresLinhaPorTime;
@@ -309,6 +320,7 @@ export class PartidasService {
       partida.peladaId,
       ordemBase + 1,
       entram.slice(0, tamanhoTime),
+      goleirosLiberados[0] ?? [],
     );
     const adversario = permanece
       ? await gerenciador.findOneByOrFail(TimeEntity, { id: permanece.id })
@@ -317,6 +329,7 @@ export class PartidasService {
           partida.peladaId,
           ordemBase + 2,
           entram.slice(tamanhoTime),
+          goleirosLiberados[1] ?? [],
         );
 
     return gerenciador.save(
@@ -330,11 +343,16 @@ export class PartidasService {
     );
   }
 
+  /**
+   * Cria um time novo com os jogadores de linha que entram, mais os goleiros
+   * fixos herdados do time que saiu daquele lado.
+   */
   private async criarTime(
     gerenciador: EntityManager,
     peladaId: string,
     ordemCriacao: number,
     jogadores: JogadorRotacao[],
+    goleirosFixos: string[] = [],
   ): Promise<TimeEntity> {
     const time = await gerenciador.save(
       gerenciador.create(TimeEntity, {
@@ -349,12 +367,17 @@ export class PartidasService {
       }),
     );
 
+    const elenco = [
+      ...jogadores.map((j) => ({ participanteId: j.id, ehGoleiro: false })),
+      ...goleirosFixos.map((id) => ({ participanteId: id, ehGoleiro: true })),
+    ];
+
     await gerenciador.save(
-      jogadores.map((j) =>
+      elenco.map((membro) =>
         gerenciador.create(JogadorTimeEntity, {
           timeId: time.id,
-          participanteId: j.id,
-          ehGoleiro: false,
+          participanteId: membro.participanteId,
+          ehGoleiro: membro.ehGoleiro,
           ativo: true,
           saiuEm: null,
         }),
@@ -364,9 +387,18 @@ export class PartidasService {
     return time;
   }
 
+  /**
+   * Monta a visão de domínio do time, separando goleiros fixos.
+   *
+   * `jogadores` traz só quem entra na rotação — o goleiro fixo fica de fora,
+   * porque pela regra da pelada ele não vai para a fila nem é sorteado. Os
+   * goleiros saem por `goleirosPorTime`, para que o time que assumir aquele
+   * lado os herde.
+   */
   private async montarTimeRotacao(
     gerenciador: EntityManager,
     timeId: string,
+    goleirosPorTime: Map<string, string[]>,
   ): Promise<TimeRotacao> {
     const time = await gerenciador.findOneByOrFail(TimeEntity, { id: timeId });
     const elenco = await gerenciador.find(JogadorTimeEntity, {
@@ -378,14 +410,22 @@ export class PartidasService {
         })
       : [];
 
+    const fixos = participantes.filter((p) => p.ehGoleiroFixo);
+    goleirosPorTime.set(
+      time.id,
+      fixos.map((p) => p.id),
+    );
+
     return {
       id: time.id,
       partidasConsecutivas: time.partidasConsecutivas,
       vitoriasConsecutivas: time.vitoriasConsecutivas,
-      jogadores: participantes.map((p) => ({
-        id: p.id,
-        ordemChegada: p.ordemChegada ?? Number.MAX_SAFE_INTEGER,
-      })),
+      jogadores: participantes
+        .filter((p) => !p.ehGoleiroFixo)
+        .map((p) => ({
+          id: p.id,
+          ordemChegada: p.ordemChegada ?? Number.MAX_SAFE_INTEGER,
+        })),
     };
   }
 

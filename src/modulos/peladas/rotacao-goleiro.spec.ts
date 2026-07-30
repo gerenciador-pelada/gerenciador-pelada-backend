@@ -1,0 +1,173 @@
+import { DataSource, EntityManager } from 'typeorm';
+import { FilaJogadorEntity } from '../../banco/entidades/fila-jogador.entity';
+import { JogadorTimeEntity } from '../../banco/entidades/jogador-time.entity';
+import { StatusPartida } from '../../comum/enums/status-partida.enum';
+import { PartidasService } from './partidas.service';
+
+const DONO = 'usuario-1';
+const PARTIDA = 'partida-1';
+
+/**
+ * Elencos: o time da casa tem 2 de linha e 1 goleiro fixo; o visitante idem.
+ * A fila tem 2 de linha esperando. Time de 2 por lado.
+ */
+const ELENCO = [
+  { timeId: 'time-a', participanteId: 'a1', ehGoleiro: false, ativo: true },
+  { timeId: 'time-a', participanteId: 'a2', ehGoleiro: false, ativo: true },
+  { timeId: 'time-a', participanteId: 'gkA', ehGoleiro: true, ativo: true },
+  { timeId: 'time-b', participanteId: 'b1', ehGoleiro: false, ativo: true },
+  { timeId: 'time-b', participanteId: 'b2', ehGoleiro: false, ativo: true },
+  { timeId: 'time-b', participanteId: 'gkB', ehGoleiro: true, ativo: true },
+];
+
+const PARTICIPANTES: Record<
+  string,
+  { id: string; ordemChegada: number; ehGoleiroFixo: boolean }
+> = {
+  a1: { id: 'a1', ordemChegada: 1, ehGoleiroFixo: false },
+  a2: { id: 'a2', ordemChegada: 2, ehGoleiroFixo: false },
+  gkA: { id: 'gkA', ordemChegada: 100, ehGoleiroFixo: true },
+  b1: { id: 'b1', ordemChegada: 3, ehGoleiroFixo: false },
+  b2: { id: 'b2', ordemChegada: 4, ehGoleiroFixo: false },
+  gkB: { id: 'gkB', ordemChegada: 101, ehGoleiroFixo: true },
+  f1: { id: 'f1', ordemChegada: 5, ehGoleiroFixo: false },
+  f2: { id: 'f2', ordemChegada: 6, ehGoleiroFixo: false },
+};
+
+function criarAmbiente() {
+  const jogadoresTimeSalvos: JogadorTimeEntity[] = [];
+  const filaSalva: FilaJogadorEntity[] = [];
+  let proximoTime = 0;
+
+  const gerenciador = {
+    findOne: jest.fn().mockResolvedValue({
+      id: 'pelada-1',
+      configuracao: {
+        permiteEmpate: true,
+        jogadoresLinhaPorTime: 2,
+        regraEmpate: 'AMBOS_SAEM',
+        pontosVitoria: 3,
+        pontosEmpate: 1,
+        pontosDerrota: 0,
+        pontosGol: 0,
+        pontosAssistencia: 0,
+        pontosBolaCheia: 0,
+        pontosBolaMurcha: 0,
+      },
+    }),
+    findOneByOrFail: jest.fn().mockImplementation((_e, onde: { id: string }) =>
+      Promise.resolve({
+        id: onde.id,
+        partidasConsecutivas: 0,
+        vitoriasConsecutivas: 0,
+      }),
+    ),
+    count: jest.fn().mockResolvedValue(2),
+    update: jest.fn().mockResolvedValue({}),
+    delete: jest.fn().mockResolvedValue({}),
+    find: jest.fn().mockImplementation((entidade: unknown, opcoes: unknown) => {
+      const o = opcoes as { where?: unknown };
+      if (entidade === JogadorTimeEntity) {
+        const onde = o.where as { timeId: string }[] | { timeId: string };
+        const ids = Array.isArray(onde)
+          ? onde.map((x) => x.timeId)
+          : [onde.timeId];
+        return Promise.resolve(ELENCO.filter((e) => ids.includes(e.timeId)));
+      }
+      if (entidade === FilaJogadorEntity) {
+        return Promise.resolve([
+          { participanteId: 'f1', posicao: 1 },
+          { participanteId: 'f2', posicao: 2 },
+        ]);
+      }
+      // ParticipantePelada e ParticipacaoPartida
+      const onde = o.where as { id: string }[] | undefined;
+      if (Array.isArray(onde)) {
+        return Promise.resolve(
+          onde.map((x) => PARTICIPANTES[x.id]).filter(Boolean),
+        );
+      }
+      return Promise.resolve([]);
+    }),
+    create: jest.fn().mockImplementation((_e, dados: unknown) => dados),
+    save: jest.fn().mockImplementation((dados: unknown) => {
+      const lista = Array.isArray(dados) ? dados : [dados];
+      for (const item of lista) {
+        const registro = item as Record<string, unknown>;
+        if ('timeId' in registro && 'participanteId' in registro) {
+          jogadoresTimeSalvos.push(item as JogadorTimeEntity);
+        }
+        if ('posicao' in registro) filaSalva.push(item as FilaJogadorEntity);
+        if ('ordemCriacao' in registro) {
+          proximoTime += 1;
+          (registro as { id: string }).id = `time-novo-${proximoTime}`;
+        }
+      }
+      return Promise.resolve(dados);
+    }),
+  };
+
+  const construtor = {
+    innerJoin: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    getOne: jest.fn().mockResolvedValue({
+      id: PARTIDA,
+      peladaId: 'pelada-1',
+      numero: 1,
+      timeCasaId: 'time-a',
+      timeVisitanteId: 'time-b',
+      golsCasa: 2,
+      golsVisitante: 1,
+      status: StatusPartida.EM_ANDAMENTO,
+    }),
+  };
+
+  const servico = new PartidasService(
+    { createQueryBuilder: () => construtor, save: jest.fn() } as never,
+    {
+      transaction: (cb: (m: EntityManager) => Promise<unknown>) =>
+        cb(gerenciador as unknown as EntityManager),
+    } as unknown as DataSource,
+  );
+
+  return { servico, jogadoresTimeSalvos, filaSalva, gerenciador };
+}
+
+describe('Rotação com goleiro fixo', () => {
+  it('não manda o goleiro fixo do time perdedor para a fila', async () => {
+    const { servico, filaSalva } = criarAmbiente();
+
+    await servico.finalizar(DONO, PARTIDA);
+
+    // O visitante perdeu (2x1). Seus jogadores de linha voltam para a fila;
+    // o goleiro fixo, não — ele fica no gol.
+    const naFila = filaSalva.map((f) => f.participanteId);
+    expect(naFila).not.toContain('gkB');
+    expect(naFila).not.toContain('gkA');
+  });
+
+  it('entrega o goleiro fixo ao time que assume o lado', async () => {
+    const { servico, jogadoresTimeSalvos } = criarAmbiente();
+
+    await servico.finalizar(DONO, PARTIDA);
+
+    const goleirosDoTimeNovo = jogadoresTimeSalvos.filter(
+      (j) => j.ehGoleiro && j.timeId.startsWith('time-novo'),
+    );
+    expect(goleirosDoTimeNovo.map((j) => j.participanteId)).toContain('gkB');
+  });
+
+  it('não conta o goleiro fixo como vaga de jogador de linha', async () => {
+    const { servico, jogadoresTimeSalvos } = criarAmbiente();
+
+    await servico.finalizar(DONO, PARTIDA);
+
+    // Time de 2: o desafiante entra com os 2 da fila, e o goleiro vem além
+    // dessas vagas — não no lugar de um jogador de linha.
+    const linhaDoTimeNovo = jogadoresTimeSalvos.filter(
+      (j) => !j.ehGoleiro && j.timeId.startsWith('time-novo'),
+    );
+    expect(linhaDoTimeNovo.map((j) => j.participanteId)).toEqual(['f1', 'f2']);
+  });
+});
