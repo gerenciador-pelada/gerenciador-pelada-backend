@@ -95,7 +95,9 @@ export class PerfilJogadorService {
       gols: contagens.get(TipoEventoPartida.GOL) ?? 0,
       assistencias,
       bolasCheias: contagens.get(TipoEventoPartida.BOLA_CHEIA) ?? 0,
-      bolasMurchas: contagens.get(TipoEventoPartida.BOLA_MURCHA) ?? 0,
+      bolasMurchas:
+        (contagens.get(TipoEventoPartida.BOLA_MURCHA) ?? 0) +
+        (contagens.get(TipoEventoPartida.GOL_CONTRA) ?? 0),
     };
   }
 

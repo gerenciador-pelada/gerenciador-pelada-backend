@@ -107,9 +107,12 @@ export class RankingsService {
           contagens.get(`${linha.jogadorId}:${TipoEventoPartida.BOLA_CHEIA}`) ??
           0,
         bolasMurchas:
-          contagens.get(
+          (contagens.get(
             `${linha.jogadorId}:${TipoEventoPartida.BOLA_MURCHA}`,
-          ) ?? 0,
+          ) ?? 0) +
+          (contagens.get(
+            `${linha.jogadorId}:${TipoEventoPartida.GOL_CONTRA}`,
+          ) ?? 0),
       }))
       .sort((a, b) => b.pontuacao - a.pontuacao || b.gols - a.gols);
   }

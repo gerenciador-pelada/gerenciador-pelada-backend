@@ -114,6 +114,25 @@ describe('HistoricoService', () => {
     expect(partida.golsVisitante).toBe(0);
   });
 
+  it('desfaz gol contra baixando o placar do time beneficiado', async () => {
+    const { servico, partida, removidos } = criarServico({
+      acao: {
+        ...acaoGol,
+        dadosPosteriores: {
+          ...acaoGol.dadosPosteriores,
+          tipo: TipoEventoPartida.GOL_CONTRA,
+          descricao: 'gol contra',
+        },
+      },
+    });
+
+    await servico.desfazer(DONO, PELADA);
+
+    expect(removidos).toHaveLength(1);
+    expect(partida.golsCasa).toBe(1);
+    expect(partida.golsVisitante).toBe(1);
+  });
+
   it('nao deixa o placar negativo', async () => {
     const { servico, partida } = criarServico({
       acao: acaoGol,

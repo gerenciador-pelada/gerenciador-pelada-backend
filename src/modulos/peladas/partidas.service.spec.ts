@@ -11,6 +11,7 @@ import { PontuacaoJogadorEntity } from '../../banco/entidades/pontuacao-jogador.
 import { RegraEmpate } from '../../comum/enums/regra-empate.enum';
 import { StatusPartida } from '../../comum/enums/status-partida.enum';
 import { StatusPelada } from '../../comum/enums/status-pelada.enum';
+import { TipoEventoPartida } from '../../comum/enums/tipo-evento-partida.enum';
 import { ErroRegraPelada } from '../../dominio/erros/erro-regra-pelada';
 import { PartidasService } from './partidas.service';
 
@@ -81,6 +82,8 @@ interface OpcoesCenarioFinalizacao {
   partida?: PartidaEntity | null;
   partidasAguardando?: number;
   usuarioAutorizado?: boolean;
+  eventos?: EventoPartidaEntity[];
+  pontosBolaMurcha?: number;
 }
 
 function criarPartida(golsCasa = 2, golsVisitante = 1): PartidaEntity {
@@ -108,6 +111,8 @@ function criarCenarioFinalizacao({
   partida = criarPartida(),
   partidasAguardando = 0,
   usuarioAutorizado = true,
+  eventos = [],
+  pontosBolaMurcha = 0,
 }: OpcoesCenarioFinalizacao = {}) {
   const configuracao = {
     permiteEmpate,
@@ -118,7 +123,7 @@ function criarCenarioFinalizacao({
     pontosGol: 0,
     pontosAssistencia: 0,
     pontosBolaCheia: 0,
-    pontosBolaMurcha: 0,
+    pontosBolaMurcha,
   } as ConfiguracaoPeladaEntity;
   const pelada = {
     id: PELADA,
@@ -176,7 +181,7 @@ function criarCenarioFinalizacao({
           { id: 'participante-b', jogadorId: 'jogador-b' },
         ]);
       }
-      if (entidade === EventoPartidaEntity) return Promise.resolve([]);
+      if (entidade === EventoPartidaEntity) return Promise.resolve(eventos);
       return Promise.resolve([]);
     }),
     create: jest
@@ -407,6 +412,29 @@ describe('PartidasService', () => {
       expect(partida?.golsCasa).toBe(1);
       expect(partida?.golsVisitante).toBe(1);
       expect(pontuacoes.map((p) => p.pontosVitoria)).toEqual([1, 1]);
+    });
+
+    it('conta gol contra como bola murcha sem contar como gol do autor', async () => {
+      const { servico, pontuacoes } = criarCenarioFinalizacao({
+        pontosBolaMurcha: -2,
+        eventos: [
+          {
+            participanteId: 'participante-a',
+            participanteRelacionadoId: null,
+            tipo: TipoEventoPartida.GOL_CONTRA,
+          } as EventoPartidaEntity,
+        ],
+      });
+
+      await servico.finalizarPelada(DONO, PELADA);
+
+      const pontuacao = pontuacoes.find(
+        (item) => item.participanteId === 'participante-a',
+      );
+      expect(pontuacao).toMatchObject({
+        pontosGols: 0,
+        pontosBolaMurcha: -2,
+      });
     });
 
     it.each([

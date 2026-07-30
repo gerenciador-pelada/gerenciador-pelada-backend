@@ -101,7 +101,10 @@ export class HistoricoService {
 
       await gerenciador.softRemove(evento);
 
-      if (dados.tipo === TipoEventoPartida.GOL) {
+      if (
+        dados.tipo === TipoEventoPartida.GOL ||
+        dados.tipo === TipoEventoPartida.GOL_CONTRA
+      ) {
         const partida = await gerenciador.findOne(PartidaEntity, {
           where: { id: dados.partidaId },
         });

@@ -92,6 +92,11 @@ describe('RankingsService', () => {
                 tipo: TipoEventoPartida.BOLA_CHEIA,
                 total: '1',
               },
+              {
+                jogadorId: 'j1',
+                tipo: TipoEventoPartida.GOL_CONTRA,
+                total: '1',
+              },
             ])
           : criarConstrutor([{ jogadorId: 'j1', total: '4' }]);
       },
@@ -113,7 +118,7 @@ describe('RankingsService', () => {
         gols: 2,
         assistencias: 4,
         bolasCheias: 1,
-        bolasMurchas: 0,
+        bolasMurchas: 1,
       }),
     );
   });

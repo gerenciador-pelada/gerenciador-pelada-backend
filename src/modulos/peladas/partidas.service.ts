@@ -437,10 +437,9 @@ export class PartidasService {
           participacao.participanteId,
           TipoEventoPartida.BOLA_CHEIA,
         ),
-        bolasMurchas: contar(
-          participacao.participanteId,
-          TipoEventoPartida.BOLA_MURCHA,
-        ),
+        bolasMurchas:
+          contar(participacao.participanteId, TipoEventoPartida.BOLA_MURCHA) +
+          contar(participacao.participanteId, TipoEventoPartida.GOL_CONTRA),
         resultado,
       });
 
