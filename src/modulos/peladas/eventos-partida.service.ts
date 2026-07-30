@@ -7,6 +7,7 @@ import { PartidaEntity } from '../../banco/entidades/partida.entity';
 import { PeladaEntity } from '../../banco/entidades/pelada.entity';
 import { TipoEventoPartida } from '../../comum/enums/tipo-evento-partida.enum';
 import { ErroRegraPelada } from '../../dominio/erros/erro-regra-pelada';
+import { ACAO_REGISTRO_EVENTO, HistoricoService } from './historico.service';
 @Injectable()
 export class EventosPartidaService {
   constructor(
@@ -16,6 +17,7 @@ export class EventosPartidaService {
     private participacoes: Repository<ParticipacaoPartidaEntity>,
     @InjectRepository(EventoPartidaEntity)
     private eventos: Repository<EventoPartidaEntity>,
+    private readonly historico: HistoricoService,
   ) {}
   async registrar(
     usuarioId: string,
@@ -69,6 +71,22 @@ export class EventosPartidaService {
       else partida.golsVisitante++;
       await this.partidas.save(partida);
     }
+
+    // Registra no historico para que o desfazer da tela consiga reverter.
+    // Sem isto o botao existia e nao fazia nada.
+    await this.historico.registrar(
+      partida.peladaId,
+      usuarioId,
+      ACAO_REGISTRO_EVENTO,
+      {
+        eventoId: e.id,
+        partidaId: partida.id,
+        tipo: dto.tipo,
+        timeId: dto.timeId,
+        descricao: dto.tipo.toLowerCase().replace(/_/g, ' '),
+      },
+    );
+
     return e;
   }
 }
