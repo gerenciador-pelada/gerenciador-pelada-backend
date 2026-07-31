@@ -160,10 +160,8 @@ export class ParticipantesService {
   /**
    * Saida temporaria: o jogador para um pouco mas continua na pelada.
    *
-   * Sai de campo — o time precisa mostrar quem esta jogando de verdade, e a
-   * vaga tem que aparecer para outro entrar. O que NAO muda e a fila: e
-   * exatamente ai que esta saida difere da desistencia. Quem descansa volta
-   * pela frente da fila; quem desiste sai dela e os de tras sobem.
+   * Encerra a participacao na partida atual, mas preserva a vaga no elenco.
+   * A fila nao muda: essa e a diferenca para uma substituicao ou desistencia.
    */
   async pausar(
     usuarioId: string,
@@ -183,18 +181,21 @@ export class ParticipantesService {
     p.status = StatusParticipantePelada.DESCANSANDO;
     const salvo = await this.participantes.save(p);
 
-    // Sai de campo de verdade: quem esta descansando nao esta jogando, e o
-    // time precisa mostrar isso para o organizador poder por outro no lugar.
-    // Antes o elenco continuava listando quem tinha saido, e a vaga nao
-    // aparecia em lugar nenhum.
-    //
-    // A FILA continua intacta de proposito — e o que separa esta saida da
-    // desistencia. Quem so foi beber agua nao vai para o fim da fila nem
-    // perde a vez que conquistou esperando; `retornar` traz de volta.
-    await this.jogadoresTime.update(
-      { participanteId: id, ativo: true },
-      { ativo: false, saiuEm: new Date() },
-    );
+    // O elenco ativo preserva a vaga na prancheta. A participacao encerrada
+    // impede novos eventos enquanto o selo FORA comunica a pausa no painel.
+    const partidaAtual = await this.partidas.findOne({
+      where: { peladaId, status: StatusPartida.EM_ANDAMENTO },
+    });
+    if (partidaAtual) {
+      await this.participacoes.update(
+        {
+          partidaId: partidaAtual.id,
+          participanteId: id,
+          saiuEm: IsNull(),
+        },
+        { saiuEm: new Date() },
+      );
+    }
 
     return salvo;
   }
@@ -223,6 +224,23 @@ export class ParticipantesService {
       : StatusParticipantePelada.PRESENTE;
 
     const salvo = await this.participantes.save(p);
+
+    if (emTime) {
+      const partidaAtual = await this.partidas.findOne({
+        where: { peladaId, status: StatusPartida.EM_ANDAMENTO },
+      });
+      const pertenceAoConfronto =
+        partidaAtual &&
+        [partidaAtual.timeCasaId, partidaAtual.timeVisitanteId].includes(
+          emTime.timeId,
+        );
+      if (partidaAtual && pertenceAoConfronto) {
+        await this.participacoes.update(
+          { partidaId: partidaAtual.id, participanteId: id },
+          { saiuEm: null },
+        );
+      }
+    }
 
     // Quem tem time retoma a vaga direto. Quem nao tem volta na FRENTE da
     // fila, e nao no fim: ele saiu de campo por uma pausa, nao por ter

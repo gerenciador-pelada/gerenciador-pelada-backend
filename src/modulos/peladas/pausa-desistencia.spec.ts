@@ -10,6 +10,7 @@ const PARTICIPANTE = 'p1';
 function criarServico(opcoes: {
   status?: StatusParticipantePelada;
   temTime?: boolean;
+  partidaEmAndamento?: boolean;
 }) {
   const participante = {
     id: PARTICIPANTE,
@@ -39,7 +40,26 @@ function criarServico(opcoes: {
   const jogadoresTime = {
     findOne: jest
       .fn()
-      .mockResolvedValue(opcoes.temTime ? { id: 'jt1', ativo: true } : null),
+      .mockResolvedValue(
+        opcoes.temTime
+          ? { id: 'jt1', timeId: 'time-casa', ativo: true }
+          : null,
+      ),
+    update: jest.fn().mockResolvedValue({}),
+  };
+  const partidas = {
+    findOne: jest.fn().mockResolvedValue(
+      opcoes.partidaEmAndamento
+        ? {
+            id: 'partida-1',
+            timeCasaId: 'time-casa',
+            timeVisitanteId: 'time-visitante',
+          }
+        : null,
+    ),
+  };
+  const participacoes = {
+    count: jest.fn().mockResolvedValue(0),
     update: jest.fn().mockResolvedValue({}),
   };
 
@@ -55,30 +75,45 @@ function criarServico(opcoes: {
     participantes as never,
     fila as never,
     jogadoresTime as never,
-    { findOne: jest.fn().mockResolvedValue(null) } as never,
-    { count: jest.fn().mockResolvedValue(0) } as never,
+    partidas as never,
+    participacoes as never,
     {} as never,
   );
 
-  return { servico, participantes, fila, jogadoresTime };
+  return {
+    servico,
+    participantes,
+    fila,
+    jogadoresTime,
+    partidas,
+    participacoes,
+  };
 }
 
 describe('Pausa e desistência', () => {
   describe('pausar', () => {
-    it('sai de campo mas nao mexe na fila', async () => {
-      const { servico, jogadoresTime, fila } = criarServico({ temTime: true });
+    it('fecha a participacao sem perder a vaga nem mexer na fila', async () => {
+      const { servico, jogadoresTime, fila, participacoes } = criarServico({
+        temTime: true,
+        partidaEmAndamento: true,
+      });
 
       const p = await servico.pausar(DONO, PELADA, PARTICIPANTE);
 
       expect(p.status).toBe(StatusParticipantePelada.DESCANSANDO);
       // Sai do time: quem descansa nao esta jogando, e a vaga precisa
       // aparecer para o organizador por outro no lugar.
-      expect(jogadoresTime.update).toHaveBeenCalledWith(
-        { participanteId: PARTICIPANTE, ativo: true },
-        expect.objectContaining({ ativo: false }),
+      expect(participacoes.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          partidaId: 'partida-1',
+          participanteId: PARTICIPANTE,
+        }),
+        expect.objectContaining({ saiuEm: expect.any(Date) }),
       );
+      expect(jogadoresTime.update).not.toHaveBeenCalled();
       // Mas a fila fica intacta — e o que separa pausa de desistencia.
       expect(fila.update).not.toHaveBeenCalled();
+      expect(fila.save).not.toHaveBeenCalled();
     });
 
     it('recusa pausar quem ja desistiu', async () => {
@@ -93,15 +128,23 @@ describe('Pausa e desistência', () => {
   });
 
   describe('retornar', () => {
-    it('volta a jogar quando a vaga no time foi guardada', async () => {
-      const { servico, fila } = criarServico({
+    it('volta ao mesmo time e reabre a participacao da partida atual', async () => {
+      const { servico, fila, participacoes } = criarServico({
         status: StatusParticipantePelada.DESCANSANDO,
         temTime: true,
+        partidaEmAndamento: true,
       });
 
       const p = await servico.retornar(DONO, PELADA, PARTICIPANTE);
 
       expect(p.status).toBe(StatusParticipantePelada.JOGANDO);
+      expect(participacoes.update).toHaveBeenCalledWith(
+        {
+          partidaId: 'partida-1',
+          participanteId: PARTICIPANTE,
+        },
+        { saiuEm: null },
+      );
       expect(fila.save).not.toHaveBeenCalled();
     });
 
