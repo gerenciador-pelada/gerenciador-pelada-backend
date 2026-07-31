@@ -10,6 +10,7 @@ import { PeladaEntity } from '../../banco/entidades/pelada.entity';
 import { PontuacaoJogadorEntity } from '../../banco/entidades/pontuacao-jogador.entity';
 import { RegraEmpate } from '../../comum/enums/regra-empate.enum';
 import { StatusPartida } from '../../comum/enums/status-partida.enum';
+import { StatusParticipantePelada } from '../../comum/enums/status-participante-pelada.enum';
 import { StatusPelada } from '../../comum/enums/status-pelada.enum';
 import { TipoEventoPartida } from '../../comum/enums/tipo-evento-partida.enum';
 import { ErroRegraPelada } from '../../dominio/erros/erro-regra-pelada';
@@ -250,6 +251,7 @@ describe('PartidasService', () => {
           { timeId: 'time-b', participanteId: 'p3', ehGoleiro: false },
         ] as Partial<JogadorTimeEntity>[]),
         create: jest.fn().mockImplementation((_e, dados: unknown) => dados),
+        update: jest.fn().mockResolvedValue({}),
         save: jest.fn().mockImplementation((d: unknown) => {
           salvos.push(d);
           return Promise.resolve(d);
@@ -274,6 +276,11 @@ describe('PartidasService', () => {
       ).toBe(true);
       expect(partida.status).toBe(StatusPartida.EM_ANDAMENTO);
       expect(partida.iniciadaEm).toBeInstanceOf(Date);
+      expect(gerenciador.update).toHaveBeenCalledWith(
+        ParticipantePeladaEntity,
+        expect.any(Object),
+        { status: StatusParticipantePelada.JOGANDO },
+      );
     });
 
     it('inclui o goleiro avulso sem coloca-lo no elenco do time', async () => {
@@ -287,6 +294,7 @@ describe('PartidasService', () => {
           { timeId: 'time-b', participanteId: 'p2', ehGoleiro: false },
         ] as Partial<JogadorTimeEntity>[]),
         create: jest.fn().mockImplementation((_e, dados: unknown) => dados),
+        update: jest.fn().mockResolvedValue({}),
         save: jest.fn().mockImplementation((dados: unknown) => {
           salvos.push(dados);
           return Promise.resolve(dados);

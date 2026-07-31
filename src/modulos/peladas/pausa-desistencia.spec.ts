@@ -41,9 +41,7 @@ function criarServico(opcoes: {
     findOne: jest
       .fn()
       .mockResolvedValue(
-        opcoes.temTime
-          ? { id: 'jt1', timeId: 'time-casa', ativo: true }
-          : null,
+        opcoes.temTime ? { id: 'jt1', timeId: 'time-casa', ativo: true } : null,
       ),
     update: jest.fn().mockResolvedValue({}),
   };
@@ -101,8 +99,7 @@ describe('Pausa e desistência', () => {
       const p = await servico.pausar(DONO, PELADA, PARTICIPANTE);
 
       expect(p.status).toBe(StatusParticipantePelada.DESCANSANDO);
-      // Sai do time: quem descansa nao esta jogando, e a vaga precisa
-      // aparecer para o organizador por outro no lugar.
+      // Sai da partida atual, mas continua ocupando a vaga na prancheta.
       expect(participacoes.update).toHaveBeenCalledWith(
         expect.objectContaining({
           partidaId: 'partida-1',
@@ -111,7 +108,7 @@ describe('Pausa e desistência', () => {
         expect.objectContaining({ saiuEm: expect.any(Date) }),
       );
       expect(jogadoresTime.update).not.toHaveBeenCalled();
-      // Mas a fila fica intacta — e o que separa pausa de desistencia.
+      // A fila fica intacta — e o que separa pausa de desistencia.
       expect(fila.update).not.toHaveBeenCalled();
       expect(fila.save).not.toHaveBeenCalled();
     });

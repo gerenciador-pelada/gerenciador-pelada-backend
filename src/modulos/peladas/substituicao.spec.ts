@@ -2,7 +2,9 @@ import { DataSource, EntityManager } from 'typeorm';
 import { FilaJogadorEntity } from '../../banco/entidades/fila-jogador.entity';
 import { JogadorTimeEntity } from '../../banco/entidades/jogador-time.entity';
 import { ParticipacaoPartidaEntity } from '../../banco/entidades/participacao-partida.entity';
+import { ParticipantePeladaEntity } from '../../banco/entidades/participante-pelada.entity';
 import { StatusPartida } from '../../comum/enums/status-partida.enum';
+import { StatusParticipantePelada } from '../../comum/enums/status-participante-pelada.enum';
 import { ErroRegraPelada } from '../../dominio/erros/erro-regra-pelada';
 import { PartidasService } from './partidas.service';
 
@@ -16,6 +18,7 @@ function criarAmbiente(opcoes: {
   saiEmCampo?: boolean;
   entraJaEmCampo?: boolean;
   saiEhGoleiro?: boolean;
+  saiDescansando?: boolean;
 }) {
   const salvos: Record<string, unknown>[] = [];
   const atualizados: { entidade: unknown; dados: unknown }[] = [];
@@ -41,7 +44,15 @@ function criarAmbiente(opcoes: {
         if (entidade === JogadorTimeEntity)
           return Promise.resolve({
             id: 'jt1',
+            timeId: 'time-a',
             ehGoleiro: opcoes.saiEhGoleiro ?? false,
+          });
+        if (entidade === ParticipantePeladaEntity)
+          return Promise.resolve({
+            id: SAI,
+            status: opcoes.saiDescansando
+              ? StatusParticipantePelada.DESCANSANDO
+              : StatusParticipantePelada.JOGANDO,
           });
         return Promise.resolve(null);
       }),
@@ -141,6 +152,25 @@ describe('Substituição durante a partida', () => {
         (a.dados as { ativo?: boolean }).ativo === false,
     );
     expect(saiuDaFila).toBeDefined();
+  });
+
+  it('substitui a vaga preservada sem enfileirar quem continua descansando', async () => {
+    const { servico, salvos } = criarAmbiente({
+      saiEmCampo: false,
+      saiDescansando: true,
+    });
+
+    const resultado = await servico.substituir(DONO, PARTIDA, SAI, ENTRA);
+
+    expect(resultado).toEqual({ saiu: SAI, entrou: ENTRA, ehGoleiro: false });
+    expect(
+      salvos.some(
+        (item) => item.participanteId === ENTRA && item.timeId === 'time-a',
+      ),
+    ).toBe(true);
+    expect(
+      salvos.some((item) => item.participanteId === SAI && 'posicao' in item),
+    ).toBe(false);
   });
 
   it('recusa quando quem sai nao esta em campo', async () => {

@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, IsNull, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, IsNull, Repository } from 'typeorm';
 import { ConfiguracaoPeladaEntity } from '../../banco/entidades/configuracao-pelada.entity';
 import { EventoPartidaEntity } from '../../banco/entidades/evento-partida.entity';
 import { FilaJogadorEntity } from '../../banco/entidades/fila-jogador.entity';
@@ -12,6 +12,7 @@ import { PeladaEntity } from '../../banco/entidades/pelada.entity';
 import { PontuacaoJogadorEntity } from '../../banco/entidades/pontuacao-jogador.entity';
 import { TimeEntity } from '../../banco/entidades/time.entity';
 import { StatusPartida } from '../../comum/enums/status-partida.enum';
+import { StatusParticipantePelada } from '../../comum/enums/status-participante-pelada.enum';
 import { StatusPelada } from '../../comum/enums/status-pelada.enum';
 import { TipoEventoPartida } from '../../comum/enums/tipo-evento-partida.enum';
 import { ErroRegraPelada } from '../../dominio/erros/erro-regra-pelada';
@@ -76,6 +77,13 @@ export class PartidasService {
         ],
       });
       const idsElenco = new Set(elenco.map((membro) => membro.participanteId));
+      if (idsElenco.size) {
+        await gerenciador.update(
+          ParticipantePeladaEntity,
+          { id: In([...idsElenco]) },
+          { status: StatusParticipantePelada.JOGANDO },
+        );
+      }
       const goleirosAvulsos = [
         partida.goleiroCasaId
           ? {
@@ -270,8 +278,8 @@ export class PartidasService {
    *
    * Quem entra herda o papel exato, inclusive ehGoleiro: trocar o goleiro sem
    * isso deixaria o time com dois de linha e o gol vazio. Quem sai vai para o
-   * fim da fila, porque acabou de jogar; se a intencao era ir embora, isso e
-   * desistencia, que e outra acao.
+   * fim da fila, porque acabou de jogar. Quem ja estava temporariamente FORA
+   * conserva o descanso sem entrar na fila; o organizador decide quando volta.
    */
   /**
    * Para o cronometro sem encerrar a partida — chuva, discussao, bola na rua.
@@ -376,7 +384,13 @@ export class PartidasService {
         ParticipacaoPartidaEntity,
         { where: { partidaId, participanteId: saiId, saiuEm: IsNull() } },
       );
-      if (!participacaoSai)
+      const participanteSai = await gerenciador.findOne(
+        ParticipantePeladaEntity,
+        { where: { id: saiId, peladaId: partida.peladaId } },
+      );
+      const estavaDescansando =
+        participanteSai?.status === StatusParticipantePelada.DESCANSANDO;
+      if (!participacaoSai && !estavaDescansando)
         throw new ErroRegraPelada(
           'JOGADOR_FORA_DA_PARTIDA',
           'Quem sai precisa estar em campo nesta partida',
@@ -392,19 +406,43 @@ export class PartidasService {
         );
 
       const membroSai = await gerenciador.findOne(JogadorTimeEntity, {
-        where: {
-          timeId: participacaoSai.timeId,
-          participanteId: saiId,
-          ativo: true,
-        },
+        where: participacaoSai
+          ? {
+              timeId: participacaoSai.timeId,
+              participanteId: saiId,
+              ativo: true,
+            }
+          : [
+              {
+                timeId: partida.timeCasaId,
+                participanteId: saiId,
+                ativo: true,
+              },
+              {
+                timeId: partida.timeVisitanteId,
+                participanteId: saiId,
+                ativo: true,
+              },
+            ],
       });
-      const ehGoleiro = membroSai?.ehGoleiro ?? participacaoSai.ehGoleiro;
+      if (!membroSai && !participacaoSai)
+        throw new ErroRegraPelada(
+          'JOGADOR_SEM_VAGA',
+          'Quem sai precisa ter uma vaga em um dos times da partida',
+        );
+      const timeId = participacaoSai?.timeId ?? membroSai!.timeId;
+      const ehGoleiro =
+        membroSai?.ehGoleiro ?? participacaoSai?.ehGoleiro ?? false;
 
       // Sai do time e da partida, guardando quando saiu.
       const agora = new Date();
-      await gerenciador.update(ParticipacaoPartidaEntity, participacaoSai.id, {
-        saiuEm: agora,
-      });
+      if (participacaoSai) {
+        await gerenciador.update(
+          ParticipacaoPartidaEntity,
+          participacaoSai.id,
+          { saiuEm: agora },
+        );
+      }
       if (membroSai) {
         await gerenciador.update(JogadorTimeEntity, membroSai.id, {
           ativo: false,
@@ -415,7 +453,7 @@ export class PartidasService {
       // Entra no time e na partida, herdando o papel.
       await gerenciador.save(
         gerenciador.create(JogadorTimeEntity, {
-          timeId: participacaoSai.timeId,
+          timeId,
           participanteId: entraId,
           ehGoleiro,
           ativo: true,
@@ -426,35 +464,38 @@ export class PartidasService {
         gerenciador.create(ParticipacaoPartidaEntity, {
           partidaId,
           participanteId: entraId,
-          timeId: participacaoSai.timeId,
+          timeId,
           ehGoleiro,
           saiuEm: null,
           minutosJogados: null,
         }),
       );
 
-      // Quem entrou sai da fila; quem saiu vai para o fim dela.
+      // Quem entrou sai da fila. Quem estava em campo vai para o fim; quem ja
+      // estava temporariamente FORA continua descansando, sem mexer na fila.
       await gerenciador.update(
         FilaJogadorEntity,
         { peladaId: partida.peladaId, participanteId: entraId, ativo: true },
         { ativo: false, saiuEm: agora },
       );
-      const ultima = await gerenciador
-        .createQueryBuilder(FilaJogadorEntity, 'f')
-        .select('COALESCE(MAX(f.posicao), 0)', 'maximo')
-        .where('f.peladaId = :peladaId AND f.ativo = true', {
-          peladaId: partida.peladaId,
-        })
-        .getRawOne<{ maximo: string }>();
-      await gerenciador.save(
-        gerenciador.create(FilaJogadorEntity, {
-          peladaId: partida.peladaId,
-          participanteId: saiId,
-          posicao: Number(ultima?.maximo ?? 0) + 1,
-          ativo: true,
-          saiuEm: null,
-        }),
-      );
+      if (!estavaDescansando) {
+        const ultima = await gerenciador
+          .createQueryBuilder(FilaJogadorEntity, 'f')
+          .select('COALESCE(MAX(f.posicao), 0)', 'maximo')
+          .where('f.peladaId = :peladaId AND f.ativo = true', {
+            peladaId: partida.peladaId,
+          })
+          .getRawOne<{ maximo: string }>();
+        await gerenciador.save(
+          gerenciador.create(FilaJogadorEntity, {
+            peladaId: partida.peladaId,
+            participanteId: saiId,
+            posicao: Number(ultima?.maximo ?? 0) + 1,
+            ativo: true,
+            saiuEm: null,
+          }),
+        );
+      }
 
       return { saiu: saiId, entrou: entraId, ehGoleiro };
     });
@@ -783,7 +824,10 @@ export class PartidasService {
         })
       : [];
 
-    const fixos = participantes.filter((p) => p.ehGoleiroFixo);
+    const disponiveis = participantes.filter(
+      (p) => p.status !== StatusParticipantePelada.DESCANSANDO,
+    );
+    const fixos = disponiveis.filter((p) => p.ehGoleiroFixo);
     goleirosPorTime.set(
       time.id,
       fixos.map((p) => p.id),
@@ -793,7 +837,7 @@ export class PartidasService {
       id: time.id,
       partidasConsecutivas: time.partidasConsecutivas,
       vitoriasConsecutivas: time.vitoriasConsecutivas,
-      jogadores: participantes
+      jogadores: disponiveis
         .filter((p) => !p.ehGoleiroFixo)
         .map((p) => ({
           id: p.id,

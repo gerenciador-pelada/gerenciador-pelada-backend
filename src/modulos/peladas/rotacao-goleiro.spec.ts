@@ -2,6 +2,7 @@ import { DataSource, EntityManager } from 'typeorm';
 import { FilaJogadorEntity } from '../../banco/entidades/fila-jogador.entity';
 import { JogadorTimeEntity } from '../../banco/entidades/jogador-time.entity';
 import { StatusPartida } from '../../comum/enums/status-partida.enum';
+import { StatusParticipantePelada } from '../../comum/enums/status-participante-pelada.enum';
 import { PartidasService } from './partidas.service';
 
 const DONO = 'usuario-1';
@@ -34,11 +35,13 @@ const PARTICIPANTES: Record<
   f2: { id: 'f2', ordemChegada: 6, ehGoleiroFixo: false },
 };
 
-function criarAmbiente(opcoes: { semGoleiroFixo?: boolean } = {}) {
+function criarAmbiente(
+  opcoes: { semGoleiroFixo?: boolean; descansando?: string } = {},
+) {
   const elenco = opcoes.semGoleiroFixo
     ? ELENCO.filter((e) => !e.ehGoleiro)
     : ELENCO;
-  const participantes = opcoes.semGoleiroFixo
+  const participantesBase = opcoes.semGoleiroFixo
     ? Object.fromEntries(
         Object.entries(PARTICIPANTES).map(([k, v]) => [
           k,
@@ -46,6 +49,14 @@ function criarAmbiente(opcoes: { semGoleiroFixo?: boolean } = {}) {
         ]),
       )
     : PARTICIPANTES;
+  const participantes = Object.fromEntries(
+    Object.entries(participantesBase).map(([id, participante]) => [
+      id,
+      id === opcoes.descansando
+        ? { ...participante, status: StatusParticipantePelada.DESCANSANDO }
+        : participante,
+    ]),
+  );
 
   const jogadoresTimeSalvos: JogadorTimeEntity[] = [];
   const filaSalva: FilaJogadorEntity[] = [];
@@ -200,5 +211,30 @@ describe('Rotação com goleiro fixo', () => {
       (j) => !j.ehGoleiro && j.timeId.startsWith('time-novo'),
     );
     expect(linhaDoTimeNovo.map((j) => j.participanteId)).toEqual(['f1', 'f2']);
+  });
+
+  it('nao leva jogador descansando do time perdedor para fila ou novo time', async () => {
+    const { servico, jogadoresTimeSalvos, filaSalva } = criarAmbiente({
+      descansando: 'b1',
+    });
+
+    await servico.finalizar(DONO, PARTIDA);
+
+    expect(filaSalva.map((f) => f.participanteId)).not.toContain('b1');
+    expect(jogadoresTimeSalvos.map((j) => j.participanteId)).not.toContain(
+      'b1',
+    );
+  });
+
+  it('nao herda goleiro fixo que continua descansando', async () => {
+    const { servico, jogadoresTimeSalvos } = criarAmbiente({
+      descansando: 'gkB',
+    });
+
+    await servico.finalizar(DONO, PARTIDA);
+
+    expect(jogadoresTimeSalvos.map((j) => j.participanteId)).not.toContain(
+      'gkB',
+    );
   });
 });
