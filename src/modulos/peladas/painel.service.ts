@@ -20,6 +20,8 @@ export interface JogadorPainel {
   ehGoleiroTemporario: boolean;
   ordemChegada: number | null;
   descansando: boolean;
+  substituiParticipanteId: string | null;
+  substituiNome: string | null;
 }
 
 export interface TimePainel {
@@ -207,6 +209,10 @@ export class PainelService {
             porParticipante.get(e.participanteId),
             e.ehGoleiro,
             false,
+            e.substituiParticipanteId ?? null,
+            e.substituiParticipanteId
+              ? porParticipante.get(e.substituiParticipanteId)
+              : undefined,
           ),
         );
       const goleiroTemporarioId =
@@ -247,6 +253,8 @@ export class PainelService {
     participante: ParticipantePeladaEntity | undefined,
     ehGoleiro: boolean,
     ehGoleiroTemporario: boolean,
+    substituiParticipanteId: string | null = null,
+    substituido?: ParticipantePeladaEntity,
   ): JogadorPainel {
     return {
       participanteId: participante?.id ?? '',
@@ -257,6 +265,8 @@ export class PainelService {
       ordemChegada: participante?.ordemChegada ?? null,
       descansando:
         participante?.status === StatusParticipantePelada.DESCANSANDO,
+      substituiParticipanteId,
+      substituiNome: substituido?.jogador?.nome ?? null,
     };
   }
 }

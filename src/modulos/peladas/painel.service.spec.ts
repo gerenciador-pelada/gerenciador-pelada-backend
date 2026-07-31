@@ -262,6 +262,13 @@ describe('PainelService', () => {
         ehGoleiroFixo: false,
         jogador: { nome: 'Bia', apelido: null },
       },
+      {
+        id: 'substituto',
+        status: StatusParticipantePelada.JOGANDO,
+        ordemChegada: 3,
+        ehGoleiroFixo: false,
+        jogador: { nome: 'Caio', apelido: 'Cai' },
+      },
     ];
     const servico = new PainelService(
       {
@@ -298,6 +305,12 @@ describe('PainelService', () => {
             participanteId: 'fora-com-vaga',
             ehGoleiro: false,
           },
+          {
+            timeId: CASA,
+            participanteId: 'substituto',
+            substituiParticipanteId: 'fora-com-vaga',
+            ehGoleiro: false,
+          },
         ]),
       } as never,
       { find: jest.fn().mockResolvedValue(participantes) } as never,
@@ -319,5 +332,12 @@ describe('PainelService', () => {
         descansando: true,
       }),
     ]);
+    expect(resultado.timeCasa?.jogadores).toContainEqual(
+      expect.objectContaining({
+        participanteId: 'substituto',
+        substituiParticipanteId: 'fora-com-vaga',
+        substituiNome: 'Ana',
+      }),
+    );
   });
 });
