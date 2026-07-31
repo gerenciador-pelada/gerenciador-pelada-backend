@@ -61,21 +61,20 @@ describe('MotorPelada.empate sem criterio de desempate', () => {
   // Os dois times com zero vitorias consecutivas: nenhum criterio decide, e a
   // escolha passa a ser do organizador. Era exatamente aqui que finalizar um
   // empate informando o vencedor falhava com ESCOLHA_ADMIN_OBRIGATORIA.
-  const zerados = () =>
-    [
-      {
-        id: 'casa',
-        jogadores: [],
-        partidasConsecutivas: 1,
-        vitoriasConsecutivas: 0,
-      },
-      {
-        id: 'visitante',
-        jogadores: [],
-        partidasConsecutivas: 1,
-        vitoriasConsecutivas: 0,
-      },
-    ] as const;
+  const zerados = () => [
+    {
+      id: 'casa',
+      jogadores: [],
+      partidasConsecutivas: 1,
+      vitoriasConsecutivas: 0,
+    },
+    {
+      id: 'visitante',
+      jogadores: [],
+      partidasConsecutivas: 1,
+      vitoriasConsecutivas: 0,
+    },
+  ];
 
   it('deduz quem sai a partir do vencedor escolhido', () => {
     const [casa, visitante] = zerados();

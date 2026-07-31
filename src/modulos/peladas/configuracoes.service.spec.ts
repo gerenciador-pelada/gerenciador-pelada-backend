@@ -109,6 +109,9 @@ describe('ConfiguracoesService', () => {
         .catch((e: unknown) => e as ErroRegraPelada);
 
       expect(erro).toBeInstanceOf(ErroRegraPelada);
+      // O matcher toBeInstanceOf nao estreita o tipo para o TypeScript; o if
+      // estreita, e so entao da para ler codigo e detalhes.
+      if (!(erro instanceof ErroRegraPelada)) throw new Error('esperava erro');
       expect(erro.codigo).toBe('CONFIGURACAO_ESTRUTURAL_TRAVADA');
       expect(erro.detalhes).toEqual({
         campos: ['jogadoresLinhaPorTime', 'quantidadeGoleiros'],

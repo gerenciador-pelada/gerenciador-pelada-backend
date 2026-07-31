@@ -67,7 +67,9 @@ function criarCenario({
       .fn()
       .mockImplementation((entrada: Partial<EventoPartidaEntity>) => entrada),
     save: jest.fn().mockImplementation((entrada: EventoPartidaEntity) => {
-      const salvo = { id: `evento-${eventos.length + 1}`, ...entrada };
+      // Spread antes do id: o id gerado aqui e o que vale. Na ordem inversa
+      // ele era silenciosamente sobrescrito quando a entrada trazia um.
+      const salvo = { ...entrada, id: `evento-${eventos.length + 1}` };
       eventos.push(salvo);
       return Promise.resolve(salvo);
     }),

@@ -140,7 +140,7 @@ describe('GruposPeladaService', () => {
       organizadorId: DONO,
       nome: 'Pelada antiga',
       edicoes: [],
-    } as GrupoPeladaEntity;
+    } as unknown as GrupoPeladaEntity;
     grupos.findOne.mockResolvedValueOnce(grupo).mockResolvedValueOnce(null);
 
     const atualizado = await servico.atualizar(DONO, GRUPO, {
@@ -192,7 +192,7 @@ describe('GruposPeladaService', () => {
       organizadorId: DONO,
       nome: 'Pelada',
       edicoes: [],
-    } as GrupoPeladaEntity;
+    } as unknown as GrupoPeladaEntity;
     grupos.findOne.mockResolvedValue(grupo);
     peladas.count.mockResolvedValue(0);
 

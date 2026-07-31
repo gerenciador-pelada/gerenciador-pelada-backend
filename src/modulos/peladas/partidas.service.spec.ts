@@ -89,6 +89,12 @@ interface OpcoesCenarioFinalizacao {
 
 function criarPartida(golsCasa = 2, golsVisitante = 1): PartidaEntity {
   return {
+    goleiroCasaId: null,
+    goleiroCasa: null,
+    goleiroVisitanteId: null,
+    goleiroVisitante: null,
+    pausadaEm: null,
+    segundosAcumulados: 0,
     id: PARTIDA,
     peladaId: PELADA,
     numero: 1,
@@ -136,30 +142,31 @@ function criarCenarioFinalizacao({
   const pontuacoes: PontuacaoJogadorEntity[] = [];
   const salvos: unknown[] = [];
   const gerenciador = {
-    findOne: jest
-      .fn()
-      .mockImplementation(
-        (
-          entidade: typeof PeladaEntity | typeof PartidaEntity,
-          opcoes: { where?: { status?: StatusPartida } },
-        ) => {
-          if (entidade === PeladaEntity) {
-            return Promise.resolve(usuarioAutorizado ? pelada : null);
-          }
-          if (entidade === ConfiguracaoPeladaEntity) {
-            return Promise.resolve(configuracao);
-          }
-          if (opcoes.where?.status === StatusPartida.EM_ANDAMENTO) {
-            return Promise.resolve(partida);
-          }
-          if (opcoes.where?.status === StatusPartida.FINALIZADA) {
-            return Promise.resolve(
-              partida?.status === StatusPartida.FINALIZADA ? partida : null,
-            );
-          }
-          return Promise.resolve(null);
-        },
-      ),
+    findOne: jest.fn().mockImplementation(
+      (
+        // O servico consulta mais entidades que estas duas; anotar so um par
+        // fazia o TypeScript declarar impossivel uma comparacao que acontece
+        // de verdade em producao.
+        entidade: unknown,
+        opcoes: { where?: { status?: StatusPartida } },
+      ) => {
+        if (entidade === PeladaEntity) {
+          return Promise.resolve(usuarioAutorizado ? pelada : null);
+        }
+        if (entidade === ConfiguracaoPeladaEntity) {
+          return Promise.resolve(configuracao);
+        }
+        if (opcoes.where?.status === StatusPartida.EM_ANDAMENTO) {
+          return Promise.resolve(partida);
+        }
+        if (opcoes.where?.status === StatusPartida.FINALIZADA) {
+          return Promise.resolve(
+            partida?.status === StatusPartida.FINALIZADA ? partida : null,
+          );
+        }
+        return Promise.resolve(null);
+      },
+    ),
     find: jest.fn().mockImplementation((entidade: new () => unknown) => {
       if (!partida) return Promise.resolve([]);
       if (entidade === ParticipacaoPartidaEntity) {

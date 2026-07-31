@@ -1,6 +1,13 @@
+import { PerfilUsuario } from '../../comum/enums/perfil-usuario.enum';
 import { PeladasController } from './peladas.controller';
 
-const USUARIO = { id: 'usuario-1' };
+// O controller recebe o usuario ja resolvido pelo guard, com perfil e
+// e-mail. Montar so o id fazia o teste divergir do que a producao entrega.
+const USUARIO = {
+  id: 'usuario-1',
+  email: 'organizador@pelada.com',
+  perfil: PerfilUsuario.ORGANIZADOR,
+};
 const ID = '11111111-1111-4111-8111-111111111111';
 
 describe('PeladasController', () => {
@@ -21,6 +28,8 @@ describe('PeladasController', () => {
   const historico = {};
   const painel = {};
   const fila = {};
+  const rankingPublico = {};
+  const financeiro = {};
   const controller = new PeladasController(
     peladas as never,
     configuracoes as never,
@@ -32,6 +41,8 @@ describe('PeladasController', () => {
     historico as never,
     painel as never,
     fila as never,
+    rankingPublico as never,
+    financeiro as never,
   );
 
   beforeEach(() => jest.resetAllMocks());
@@ -93,7 +104,7 @@ describe('PeladasController', () => {
   it('finaliza a pelada autenticada com eventual vencedor da decisao', () => {
     const dto = { vencedorDecisao: 'CASA' as const };
 
-    void controller.finalizarPelada(USUARIO as never, ID, dto);
+    void controller.finalizarPelada(USUARIO, ID, dto);
 
     expect(partidas.finalizarPelada).toHaveBeenCalledWith(USUARIO.id, ID, dto);
   });
