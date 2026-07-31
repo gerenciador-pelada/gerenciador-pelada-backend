@@ -48,8 +48,7 @@ function criarAmbiente(opcoes: {
             id: 'jt1',
             timeId: 'time-a',
             ehGoleiro: opcoes.saiEhGoleiro ?? false,
-            substituiParticipanteId:
-              opcoes.saiSubstituiParticipanteId ?? null,
+            substituiParticipanteId: opcoes.saiSubstituiParticipanteId ?? null,
           });
         if (entidade === ParticipantePeladaEntity)
           return Promise.resolve({
@@ -178,8 +177,7 @@ describe('Substituição durante a partida', () => {
     ).toBe(true);
     expect(
       atualizados.some(
-        (item) =>
-          item.entidade === JogadorTimeEntity && item.alvo === 'jt1',
+        (item) => item.entidade === JogadorTimeEntity && item.alvo === 'jt1',
       ),
     ).toBe(false);
     expect(

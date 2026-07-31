@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AdicionarSubstituicaoTemporaria1785530000000
-  implements MigrationInterface
-{
+export class AdicionarSubstituicaoTemporaria1785530000000 implements MigrationInterface {
   name = 'AdicionarSubstituicaoTemporaria1785530000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
