@@ -68,7 +68,8 @@ export class FinanceiroService {
     // paga um centavo a mais. Distribuir o resto pelos primeiros e melhor que
     // arredondar todo mundo para cima — assim a soma bate exatamente com o
     // valor do campo, sem sobra nem falta artificial.
-    const porCabeca = pagantes.length > 0 ? Math.floor(total / pagantes.length) : 0;
+    const porCabeca =
+      pagantes.length > 0 ? Math.floor(total / pagantes.length) : 0;
     const resto = pagantes.length > 0 ? total % pagantes.length : 0;
 
     const deveDe = new Map<string, number>();

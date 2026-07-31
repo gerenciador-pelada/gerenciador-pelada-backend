@@ -4,6 +4,7 @@ import { DataSource, EntityManager, Repository } from 'typeorm';
 import { FilaJogadorEntity } from '../../banco/entidades/fila-jogador.entity';
 import { JogadorTimeEntity } from '../../banco/entidades/jogador-time.entity';
 import { ParticipantePeladaEntity } from '../../banco/entidades/participante-pelada.entity';
+import { ParticipacaoPartidaEntity } from '../../banco/entidades/participacao-partida.entity';
 import { PartidaEntity } from '../../banco/entidades/partida.entity';
 import { PeladaEntity } from '../../banco/entidades/pelada.entity';
 import { StatusParticipantePelada } from '../../comum/enums/status-participante-pelada.enum';
@@ -213,6 +214,81 @@ export class FilaService {
       await this.reescreverCom(gerenciador, peladaId, nova);
       return gerenciador.find(FilaJogadorEntity, {
         where: { peladaId, ativo: true },
+        relations: ['participante', 'participante.jogador'],
+        order: { posicao: 'ASC' },
+      });
+    });
+  }
+
+  /**
+   * Poe alguem da fila numa vaga aberta de um time.
+   *
+   * Quando alguem desiste ou vai embora, o vinculo com o time e desativado e
+   * sobra um buraco: nao ha ninguem para trocar, entao `entrarNoLugarDe` nao
+   * serve e o time seguiria jogando desfalcado sem saida pelo app.
+   *
+   * Funciona tambem com a partida em andamento — e exatamente quando costuma
+   * acontecer. Nesse caso cria tambem a participacao, senao quem entrou nao
+   * poderia marcar gol nem pontuaria ao final.
+   */
+  async completarTime(
+    usuarioId: string,
+    peladaId: string,
+    participanteId: string,
+    timeId: string,
+  ): Promise<FilaJogadorEntity[]> {
+    await this.carregarPelada(usuarioId, peladaId);
+
+    const ordem = await this.ordemAtual(peladaId);
+    if (!ordem.includes(participanteId))
+      throw new ErroRegraPelada(
+        'PARTICIPANTE_FORA_DA_FILA',
+        'Quem entra precisa estar na fila',
+      );
+
+    const jaEmTime = await this.jogadoresTime.findOne({
+      where: { participanteId, ativo: true },
+    });
+    if (jaEmTime)
+      throw new ErroRegraPelada(
+        'PARTICIPANTE_EM_TIME',
+        'Este jogador ja esta em um time',
+      );
+
+    return this.fonteDados.transaction(async (gerenciador) => {
+      await gerenciador.save(
+        gerenciador.create(JogadorTimeEntity, {
+          timeId,
+          participanteId,
+          ativo: true,
+          ehGoleiro: false,
+          saiuEm: null,
+        }),
+      );
+
+      const emAndamento = await gerenciador.findOne(PartidaEntity, {
+        where: { peladaId, status: StatusPartida.EM_ANDAMENTO },
+      });
+      if (emAndamento) {
+        await gerenciador.save(
+          gerenciador.create(ParticipacaoPartidaEntity, {
+            partidaId: emAndamento.id,
+            participanteId,
+            timeId,
+            ehGoleiro: false,
+            saiuEm: null,
+            minutosJogados: null,
+          }),
+        );
+      }
+
+      await this.reescreverCom(
+        gerenciador,
+        peladaId,
+        ordem.filter((id) => id !== participanteId),
+      );
+      return gerenciador.find(FilaJogadorEntity, {
+        where: { peladaId },
         relations: ['participante', 'participante.jogador'],
         order: { posicao: 'ASC' },
       });

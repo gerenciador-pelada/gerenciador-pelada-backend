@@ -30,3 +30,9 @@ export class EntrarNoLugarDeDto {
   @IsUUID('4', { message: 'saiId deve ser um UUID' })
   saiId: string;
 }
+
+export class CompletarTimeDto {
+  @ApiProperty({ description: 'Time que esta com vaga aberta' })
+  @IsUUID('4', { message: 'timeId deve ser um UUID' })
+  timeId: string;
+}

@@ -50,6 +50,7 @@ import { Publico } from '../../comum/decoradores/publico.decorator';
 import { Throttle } from '@nestjs/throttler';
 import {
   AdicionarNaFilaDto,
+  CompletarTimeDto,
   EntrarNoLugarDeDto,
   ReordenarFilaDto,
 } from './dto/reordenar-fila.dto';
@@ -494,6 +495,17 @@ export class PeladasController {
     @Param('participanteId', ParseUUIDPipe) participanteId: string,
   ) {
     return this.filaService.remover(u.id, id, participanteId);
+  }
+
+  @Post(':id/fila/:participanteId/completar')
+  @ApiOperation({ summary: 'Poe alguem da fila numa vaga aberta do time' })
+  completarTime(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('participanteId', ParseUUIDPipe) participanteId: string,
+    @Body() dto: CompletarTimeDto,
+  ) {
+    return this.filaService.completarTime(u.id, id, participanteId, dto.timeId);
   }
 
   @Post(':id/fila/:participanteId/entrar')

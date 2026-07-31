@@ -7,7 +7,9 @@ export class DefinirValorCampoDto {
     description: 'Custo do campo em CENTAVOS. Null limpa o valor.',
   })
   @IsOptional()
-  @IsInt({ message: 'valorCampoCentavos deve ser um numero inteiro de centavos' })
+  @IsInt({
+    message: 'valorCampoCentavos deve ser um numero inteiro de centavos',
+  })
   @Min(0, { message: 'valorCampoCentavos nao pode ser negativo' })
   valorCampoCentavos?: number | null;
 
