@@ -28,6 +28,7 @@ import { JogadorTimeEntity } from '../../banco/entidades/jogador-time.entity';
 import { PainelService } from './painel.service';
 import { RankingPublicoService } from './ranking-publico.service';
 import { FilaService } from './fila.service';
+import { FinanceiroService } from './financeiro.service';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { FilaService } from './fila.service';
     PainelService,
     RankingPublicoService,
     FilaService,
+    FinanceiroService,
   ],
   exports: [PeladasService, ConfiguracoesService],
 })

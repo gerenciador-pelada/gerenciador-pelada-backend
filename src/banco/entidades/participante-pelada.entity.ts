@@ -40,6 +40,15 @@ export class ParticipantePeladaEntity {
   @Column({ type: 'timestamptz', nullable: true }) chegadaEm: Date | null;
   @Column({ type: 'int', nullable: true }) ordemChegada: number | null;
   @Column({ default: false }) ehGoleiroFixo: boolean;
+
+  /**
+   * Se ja acertou a parte dele no aluguel do campo.
+   *
+   * Fica no participante, e nao num registro de pagamento a parte, porque a
+   * pergunta que a pelada faz e binaria e por edicao: "fulano pagou hoje?".
+   * Valor, troco e quem recebeu sao combinados fora do app.
+   */
+  @Column({ default: false }) pagou: boolean;
   @CreateDateColumn({ type: 'timestamptz' }) criadoEm: Date;
   @UpdateDateColumn({ type: 'timestamptz' }) atualizadoEm: Date;
 }

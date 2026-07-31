@@ -51,6 +51,17 @@ export class PeladaEntity {
   @Column({ type: 'uuid', nullable: true })
   temporadaId: string | null;
 
+  /**
+   * Quanto custou o campo, em CENTAVOS.
+   *
+   * Inteiro e nao decimal: dinheiro em ponto flutuante acumula erro, e aqui a
+   * soma do rateio precisa fechar com o total. Nulo = ainda nao informado.
+   */
+  @Column({ type: 'int', nullable: true }) valorCampoCentavos: number | null;
+
+  /** Em muita pelada o goleiro fixo joga de graca por ficar no gol. */
+  @Column({ default: true }) goleiroFixoPaga: boolean;
+
   @ManyToOne(() => TemporadaEntity, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'temporada_id' })
   temporada: TemporadaEntity | null;

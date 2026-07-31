@@ -41,6 +41,11 @@ import { TrocarJogadoresDto } from './dto/trocar-jogadores.dto';
 import { PainelService } from './painel.service';
 import { FilaService } from './fila.service';
 import { RankingPublicoService } from './ranking-publico.service';
+import { FinanceiroService } from './financeiro.service';
+import {
+  DefinirValorCampoDto,
+  MarcarPagamentoDto,
+} from './dto/acerto-financeiro.dto';
 import { Publico } from '../../comum/decoradores/publico.decorator';
 import { Throttle } from '@nestjs/throttler';
 import {
@@ -66,6 +71,7 @@ export class PeladasController {
     private readonly painel: PainelService,
     private readonly filaService: FilaService,
     private readonly rankingPublico_: RankingPublicoService,
+    private readonly financeiro: FinanceiroService,
   ) {}
 
   @Get(':id/painel')
@@ -424,6 +430,39 @@ export class PeladasController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.rankingPublico_.revogar(u.id, id);
+  }
+
+  // O acerto continua acessivel depois da pelada encerrada: e justamente
+  // depois do jogo que se cobra, e travar aqui obrigaria a reabrir a pelada
+  // so para marcar quem pagou.
+  @Get(':id/acerto')
+  @ApiOperation({ summary: 'Rateio do campo e quem ja pagou' })
+  buscarAcerto(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.financeiro.resumo(u.id, id);
+  }
+
+  @Patch(':id/acerto')
+  @ApiOperation({ summary: 'Define o valor do campo e a isencao do goleiro' })
+  definirAcerto(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: DefinirValorCampoDto,
+  ) {
+    return this.financeiro.definirValor(u.id, id, dto);
+  }
+
+  @Patch(':id/acerto/:participanteId')
+  @ApiOperation({ summary: 'Marca se a pessoa pagou' })
+  marcarPagamento(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('participanteId', ParseUUIDPipe) participanteId: string,
+    @Body() dto: MarcarPagamentoDto,
+  ) {
+    return this.financeiro.marcarPagamento(u.id, id, participanteId, dto.pagou);
   }
 
   @Patch(':id/fila')
