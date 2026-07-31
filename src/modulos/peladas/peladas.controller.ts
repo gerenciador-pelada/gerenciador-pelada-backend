@@ -203,8 +203,9 @@ export class PeladasController {
   @Get('/rankings') listarRankings(
     @UsuarioAtual() u: UsuarioRequisicao,
     @Query('peladaId') peladaId?: string,
+    @Query('grupoId') grupoId?: string,
   ) {
-    return this.rankings.listar(u.id, peladaId);
+    return this.rankings.listar(u.id, peladaId, grupoId);
   }
 
   @Get(':id/historico') listarHistorico(

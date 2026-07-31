@@ -104,6 +104,9 @@ export class PainelService {
     return {
       pelada: {
         id: pelada.id,
+        // O grupo e o que permite a tela oferecer o recorte "esta pelada"
+        // — todas as edicoes somadas — sem uma consulta so para descobri-lo.
+        grupoId: pelada.grupoId,
         nome: pelada.nome,
         status: pelada.status,
         local: pelada.local?.nome ?? null,
