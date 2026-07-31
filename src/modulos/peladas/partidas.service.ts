@@ -455,6 +455,7 @@ export class PartidasService {
         (estavaDescansando ? saiId : null);
       const preservaVagaTitular =
         estavaDescansando && !membroSai?.substituiParticipanteId;
+      const substituicaoTemporaria = Boolean(substituiParticipanteId);
 
       // Sai do time e da partida, guardando quando saiu.
       const agora = new Date();
@@ -494,14 +495,17 @@ export class PartidasService {
         }),
       );
 
-      // Quem entrou sai da fila. Quem estava em campo vai para o fim; quem ja
-      // estava temporariamente FORA continua descansando, sem mexer na fila.
-      await gerenciador.update(
-        FilaJogadorEntity,
-        { peladaId: partida.peladaId, participanteId: entraId, ativo: true },
-        { ativo: false, saiuEm: agora },
-      );
-      if (!estavaDescansando) {
+      // Na cobertura temporaria, tanto quem entra quanto um substituto que
+      // sai preservam suas posicoes atuais. A fila so muda numa substituicao
+      // definitiva entre dois jogadores de campo.
+      if (!substituicaoTemporaria) {
+        await gerenciador.update(
+          FilaJogadorEntity,
+          { peladaId: partida.peladaId, participanteId: entraId, ativo: true },
+          { ativo: false, saiuEm: agora },
+        );
+      }
+      if (!estavaDescansando && !membroSai?.substituiParticipanteId) {
         const ultima = await gerenciador
           .createQueryBuilder(FilaJogadorEntity, 'f')
           .select('COALESCE(MAX(f.posicao), 0)', 'maximo')
@@ -705,7 +709,9 @@ export class PartidasService {
     const vagas = permanece ? tamanhoTime : tamanhoTime * 2;
 
     const daFila = fila.slice(0, vagas);
-    const complemento = [...jogadoresQueSaem]
+    const idsNaFila = new Set(fila.map((jogador) => jogador.id));
+    const complemento = jogadoresQueSaem
+      .filter((jogador) => !idsNaFila.has(jogador.id))
       .sort((a, b) => a.ordemChegada - b.ordemChegada)
       .slice(0, Math.max(0, vagas - daFila.length));
     const entram = [...daFila, ...complemento];
@@ -760,7 +766,7 @@ export class PartidasService {
     const sobra = [
       ...fila.slice(daFila.length),
       ...jogadoresQueSaem
-        .filter((j) => !complemento.some((c) => c.id === j.id))
+        .filter((j) => !entram.some((c) => c.id === j.id))
         .sort((a, b) => a.ordemChegada - b.ordemChegada),
       ...substitutosQueVoltamFila.filter(
         (substituto) =>

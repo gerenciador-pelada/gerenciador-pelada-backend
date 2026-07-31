@@ -19,6 +19,7 @@ interface RegistroFila {
 function criarServico(
   registros: RegistroFila[],
   participante?: Partial<ParticipantePeladaEntity>,
+  jogadoresPorParticipante: Record<string, Record<string, unknown>> = {},
 ) {
   const gerenciador = {
     create: jest
@@ -64,8 +65,20 @@ function criarServico(
       findOne: jest.fn().mockResolvedValue(participante ?? null),
     } as never,
     fila as never,
+    {
+      findOne: jest
+        .fn()
+        .mockImplementation(
+          (consulta: { where: { participanteId?: string } }) =>
+            Promise.resolve(
+              consulta.where.participanteId
+                ? (jogadoresPorParticipante[consulta.where.participanteId] ??
+                    null)
+                : null,
+            ),
+        ),
+    } as never,
     { findOne: jest.fn().mockResolvedValue(null) } as never,
-    {} as never,
     {
       transaction: (acao: (manager: EntityManager) => Promise<unknown>) =>
         acao(gerenciador as unknown as EntityManager),
@@ -177,13 +190,22 @@ describe('FilaService', () => {
           ]),
       } as never,
       {
-        findOne: jest.fn().mockResolvedValue({
-          id: 'vaga-1',
-          timeId: 'time-a',
-          participanteId: 'fora',
-          ehGoleiro: false,
-          ativo: true,
-        }),
+        findOne: jest
+          .fn()
+          .mockImplementation(
+            (consulta: { where: { participanteId?: string } }) =>
+              Promise.resolve(
+                consulta.where.participanteId === 'fora'
+                  ? {
+                      id: 'vaga-1',
+                      timeId: 'time-a',
+                      participanteId: 'fora',
+                      ehGoleiro: false,
+                      ativo: true,
+                    }
+                  : null,
+              ),
+          ),
       } as never,
       { findOne: jest.fn().mockResolvedValue(null) } as never,
       {
@@ -207,11 +229,48 @@ describe('FilaService', () => {
         ativo: true,
       }),
     );
+    expect(salvos.flat()).toContainEqual(
+      expect.objectContaining({
+        participanteId: 'entra',
+        posicao: 1,
+        ativo: true,
+      }),
+    );
     expect(
       salvos.flat().some((item) => {
         const registro = item as { participanteId?: string };
         return registro.participanteId === 'fora';
       }),
     ).toBe(false);
+  });
+
+  it('recusa colocar em outro time quem ja esta cobrindo uma vaga', async () => {
+    const { servico } = criarServico(
+      [{ participanteId: 'entra', ativo: true, posicao: 1 }],
+      {
+        id: 'fora',
+        peladaId: PELADA,
+        status: StatusParticipantePelada.DESCANSANDO,
+      },
+      {
+        fora: {
+          id: 'vaga-fora',
+          timeId: 'time-a',
+          participanteId: 'fora',
+          ativo: true,
+        },
+        entra: {
+          id: 'cobertura-atual',
+          timeId: 'time-b',
+          participanteId: 'entra',
+          substituiParticipanteId: 'outro-titular',
+          ativo: true,
+        },
+      },
+    );
+
+    await expect(
+      servico.entrarNoLugarDe(DONO, PELADA, 'entra', 'fora'),
+    ).rejects.toMatchObject({ codigo: 'PARTICIPANTE_EM_TIME' });
   });
 });

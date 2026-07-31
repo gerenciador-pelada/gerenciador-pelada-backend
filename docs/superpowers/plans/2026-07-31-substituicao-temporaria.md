@@ -13,7 +13,7 @@
 - A saída temporária do titular não altera a fila.
 - Somente um substituto ativo pode cobrir cada titular.
 - O titular permanece visível no time com `FORA`.
-- O substituto volta ao fim da fila quando o titular reassume ou o time permanece.
+- O substituto preserva sua posição na fila enquanto cobre a vaga e quando o titular reassume.
 - Se o time sai, o substituto participa da rotação normal e o titular descansando não entra nela.
 - Implementar diretamente em `src` e executar migrations no banco Docker local.
 
@@ -115,20 +115,22 @@ git commit -m "feat: colocar substituto temporario no time"
 - Modify: `src/modulos/peladas/rotacao-goleiro.spec.ts`
 
 **Interfaces:**
-- Produces: retorno encerra cobertura e enfileira substituto; início escala titular somente sem cobertura; rotação limpa coberturas do time que permanece.
+- Produces: retorno encerra cobertura sem alterar a fila; início escala titular somente sem cobertura; rotação limpa coberturas do time que permanece.
 
 - [ ] **Step 1: Write failing return test**
 
 ```ts
 expect(vinculoTemporario.ativo).toBe(false);
 expect(participacaoSubstituto.saiuEm).toBeInstanceOf(Date);
-expect(filaFinal.at(-1)?.participanteId).toBe('substituto');
+expect(filaFinal).toContainEqual(
+  expect.objectContaining({ participanteId: 'substituto', posicao: posicaoOriginal }),
+);
 expect(participacaoTitular.saiuEm).toBeNull();
 ```
 
 - [ ] **Step 2: Implement transactional return cleanup**
 
-Localizar o vínculo ativo com `substituiParticipanteId = titular`, encerrá-lo, fechar sua participação atual e enfileirar o substituto no fim antes de reabrir o titular.
+Localizar o vínculo ativo com `substituiParticipanteId = titular`, encerrá-lo e fechar sua participação atual sem reescrever a fila antes de reabrir o titular.
 
 - [ ] **Step 3: Write failing start and winner tests**
 
@@ -136,13 +138,15 @@ Localizar o vínculo ativo com `substituiParticipanteId = titular`, encerrá-lo,
 expect(participacoesCriadas).not.toContainEqual(
   expect.objectContaining({ participanteId: 'titular-coberto' }),
 );
-expect(filaPosJogo).toContain('substituto-vencedor');
+expect(filaPosJogo).toContainEqual(
+  expect.objectContaining({ id: 'substituto-vencedor', posicao: posicaoOriginal }),
+);
 expect(vinculoTitular.ativo).toBe(true);
 ```
 
 - [ ] **Step 4: Implement start filtering and winner cleanup**
 
-No início, excluir IDs referenciados por vínculos temporários. Na rotação, temporários do time que permanece são desativados e anexados ao fim da fila; no time que sai continuam em `TimeRotacao.jogadores`.
+No início, excluir IDs referenciados por vínculos temporários. Na rotação, temporários do time que permanece são desativados sem mudar a fila; no time que sai não podem ser duplicados entre fila e `TimeRotacao.jogadores`.
 
 - [ ] **Step 5: Verify and commit**
 

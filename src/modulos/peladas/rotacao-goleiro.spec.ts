@@ -33,7 +33,7 @@ const PARTICIPANTES: Record<
   gkB: { id: 'gkB', ordemChegada: 101, ehGoleiroFixo: true },
   f1: { id: 'f1', ordemChegada: 5, ehGoleiroFixo: false },
   f2: { id: 'f2', ordemChegada: 6, ehGoleiroFixo: false },
-  subA: { id: 'subA', ordemChegada: 7, ehGoleiroFixo: false },
+  subA: { id: 'subA', ordemChegada: 2, ehGoleiroFixo: false },
 };
 
 function criarAmbiente(
@@ -41,6 +41,8 @@ function criarAmbiente(
     semGoleiroFixo?: boolean;
     descansando?: string;
     substitutoTemporario?: boolean;
+    substitutoNoPerdedor?: boolean;
+    filaSomenteSubstituto?: boolean;
   } = {},
 ) {
   const elencoBase = opcoes.semGoleiroFixo
@@ -51,9 +53,9 @@ function criarAmbiente(
         ...elencoBase,
         {
           id: 'jt-sub-a',
-          timeId: 'time-a',
+          timeId: opcoes.substitutoNoPerdedor ? 'time-b' : 'time-a',
           participanteId: 'subA',
-          substituiParticipanteId: 'a1',
+          substituiParticipanteId: opcoes.substitutoNoPerdedor ? 'b1' : 'a1',
           ehGoleiro: false,
           ativo: true,
         },
@@ -106,39 +108,48 @@ function criarAmbiente(
     count: jest.fn().mockResolvedValue(2),
     update: jest.fn().mockResolvedValue({}),
     delete: jest.fn().mockResolvedValue({}),
-    find: jest.fn().mockImplementation((entidade: unknown, opcoes: unknown) => {
-      const o = opcoes as { where?: unknown };
-      if (entidade === JogadorTimeEntity) {
-        const onde = o.where as { timeId: string }[] | { timeId: string };
-        const ids = Array.isArray(onde)
-          ? onde.map((x) => x.timeId)
-          : [onde.timeId];
-        const encontrados = elenco.filter((e) => ids.includes(e.timeId));
-        return Promise.resolve(
-          !Array.isArray(onde) && 'substituiParticipanteId' in onde
-            ? encontrados.filter(
-                (e) =>
-                  'substituiParticipanteId' in e &&
-                  Boolean(e.substituiParticipanteId),
-              )
-            : encontrados,
-        );
-      }
-      if (entidade === FilaJogadorEntity) {
-        return Promise.resolve([
-          { participanteId: 'f1', posicao: 1 },
-          { participanteId: 'f2', posicao: 2 },
-        ]);
-      }
-      // ParticipantePelada e ParticipacaoPartida
-      const onde = o.where as { id: string }[] | undefined;
-      if (Array.isArray(onde)) {
-        return Promise.resolve(
-          onde.map((x) => participantes[x.id]).filter(Boolean),
-        );
-      }
-      return Promise.resolve([]);
-    }),
+    find: jest
+      .fn()
+      .mockImplementation((entidade: unknown, consulta: unknown) => {
+        const o = consulta as { where?: unknown };
+        if (entidade === JogadorTimeEntity) {
+          const onde = o.where as { timeId: string }[] | { timeId: string };
+          const ids = Array.isArray(onde)
+            ? onde.map((x) => x.timeId)
+            : [onde.timeId];
+          const encontrados = elenco.filter((e) => ids.includes(e.timeId));
+          return Promise.resolve(
+            !Array.isArray(onde) && 'substituiParticipanteId' in onde
+              ? encontrados.filter(
+                  (e) =>
+                    'substituiParticipanteId' in e &&
+                    Boolean(e.substituiParticipanteId),
+                )
+              : encontrados,
+          );
+        }
+        if (entidade === FilaJogadorEntity) {
+          if (opcoes.filaSomenteSubstituto) {
+            return Promise.resolve([{ participanteId: 'subA', posicao: 1 }]);
+          }
+          const registros = [
+            { participanteId: 'f1', posicao: 1 },
+            { participanteId: 'f2', posicao: 2 },
+          ];
+          if (opcoes.substitutoTemporario) {
+            registros.push({ participanteId: 'subA', posicao: 3 });
+          }
+          return Promise.resolve(registros);
+        }
+        // ParticipantePelada e ParticipacaoPartida
+        const onde = o.where as { id: string }[] | undefined;
+        if (Array.isArray(onde)) {
+          return Promise.resolve(
+            onde.map((x) => participantes[x.id]).filter(Boolean),
+          );
+        }
+        return Promise.resolve([]);
+      }),
     create: jest.fn().mockImplementation((_e, dados: unknown) => dados),
     save: jest.fn().mockImplementation((dados: unknown) => {
       const lista = Array.isArray(dados) ? dados : [dados];
@@ -265,7 +276,7 @@ describe('Rotação com goleiro fixo', () => {
     );
   });
 
-  it('manda o substituto do time vencedor ao fim e devolve a vaga ao titular', async () => {
+  it('preserva a vez do substituto na fila ao devolver a vaga ao titular', async () => {
     const { servico, filaSalva, gerenciador } = criarAmbiente({
       descansando: 'a1',
       substitutoTemporario: true,
@@ -274,9 +285,9 @@ describe('Rotação com goleiro fixo', () => {
     await servico.finalizar(DONO, PARTIDA);
 
     expect(filaSalva.map((f) => f.participanteId)).toEqual([
+      'subA',
       'b1',
       'b2',
-      'subA',
     ]);
     expect(filaSalva.map((f) => f.participanteId)).not.toContain('a1');
     expect(gerenciador.update).toHaveBeenCalledWith(
@@ -284,5 +295,22 @@ describe('Rotação com goleiro fixo', () => {
       'jt-sub-a',
       expect.objectContaining({ ativo: false }),
     );
+  });
+
+  it('nao escala duas vezes o substituto do time perdedor que segue na fila', async () => {
+    const { servico, jogadoresTimeSalvos, filaSalva } = criarAmbiente({
+      descansando: 'b1',
+      substitutoTemporario: true,
+      substitutoNoPerdedor: true,
+      filaSomenteSubstituto: true,
+    });
+
+    await servico.finalizar(DONO, PARTIDA);
+
+    const linhaDoTimeNovo = jogadoresTimeSalvos
+      .filter((j) => !j.ehGoleiro && j.timeId.startsWith('time-novo'))
+      .map((j) => j.participanteId);
+    expect(linhaDoTimeNovo).toEqual(['subA', 'b2']);
+    expect(filaSalva.map((j) => j.participanteId)).not.toContain('subA');
   });
 });

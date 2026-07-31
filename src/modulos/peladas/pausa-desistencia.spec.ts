@@ -29,7 +29,20 @@ function criarServico(opcoes: {
     update: jest.fn().mockResolvedValue({}),
   };
   const fila = {
-    findOne: jest.fn().mockResolvedValue(null),
+    findOne: jest
+      .fn()
+      .mockImplementation((consulta: { where: { participanteId?: string } }) =>
+        Promise.resolve(
+          opcoes.temSubstituto && consulta.where.participanteId === SUBSTITUTO
+            ? {
+                id: 'fila-substituto',
+                participanteId: SUBSTITUTO,
+                posicao: 2,
+                ativo: true,
+              }
+            : null,
+        ),
+      ),
     // A desistencia compacta a fila depois de tirar quem saiu.
     find: jest.fn().mockResolvedValue([]),
     create: jest.fn().mockImplementation((d: unknown) => d),
@@ -190,7 +203,7 @@ describe('Pausa e desistência', () => {
       expect(fila.save).toHaveBeenCalled();
     });
 
-    it('retoma a vaga e manda o substituto para o fim da fila', async () => {
+    it('retoma a vaga sem alterar a posicao do substituto na fila', async () => {
       const { servico, fila, jogadoresTime, participacoes, participantes } =
         criarServico({
           status: StatusParticipantePelada.DESCANSANDO,
@@ -215,15 +228,11 @@ describe('Pausa e desistência', () => {
       expect(participantes.update).toHaveBeenCalledWith(SUBSTITUTO, {
         status: StatusParticipantePelada.PRESENTE,
       });
-      expect(fila.save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          participanteId: SUBSTITUTO,
-          posicao: 1,
-        }),
+      expect(fila.update).not.toHaveBeenCalledWith(
+        'fila-substituto',
+        expect.anything(),
       );
-      expect(fila.save).not.toHaveBeenCalledWith(
-        expect.objectContaining({ participanteId: PARTICIPANTE }),
-      );
+      expect(fila.save).not.toHaveBeenCalled();
     });
 
     it('cria a participacao ao voltar no meio do jogo seguinte', async () => {

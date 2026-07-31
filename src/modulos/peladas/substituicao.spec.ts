@@ -183,11 +183,18 @@ describe('Substituição durante a partida', () => {
     expect(
       salvos.some((item) => item.participanteId === SAI && 'posicao' in item),
     ).toBe(false);
+    expect(
+      atualizados.some(
+        (item) =>
+          item.entidade === FilaJogadorEntity &&
+          (item.alvo as { participanteId?: string }).participanteId === ENTRA,
+      ),
+    ).toBe(false);
   });
 
   it('mantem o titular original ao trocar um substituto por outro', async () => {
     const titular = 'p-titular';
-    const { servico, salvos } = criarAmbiente({
+    const { servico, salvos, atualizados } = criarAmbiente({
       saiSubstituiParticipanteId: titular,
     });
 
@@ -199,9 +206,16 @@ describe('Substituição durante a partida', () => {
         substituiParticipanteId: titular,
       }),
     );
-    expect(salvos).toContainEqual(
-      expect.objectContaining({ participanteId: SAI, posicao: 4 }),
-    );
+    expect(
+      salvos.some((item) => item.participanteId === SAI && 'posicao' in item),
+    ).toBe(false);
+    expect(
+      atualizados.some(
+        (item) =>
+          item.entidade === FilaJogadorEntity &&
+          (item.alvo as { participanteId?: string }).participanteId === ENTRA,
+      ),
+    ).toBe(false);
   });
 
   it('recusa quando quem sai nao esta em campo', async () => {

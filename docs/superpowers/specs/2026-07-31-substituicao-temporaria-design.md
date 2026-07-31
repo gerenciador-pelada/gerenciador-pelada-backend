@@ -26,7 +26,7 @@ Ao tocar no jogador `FORA` e escolher alguém da fila:
 1. o vínculo do titular permanece ativo;
 2. o substituto recebe um novo vínculo com `substituiParticipanteId` apontando
    para o titular;
-3. o substituto sai da fila;
+3. o substituto permanece na mesma posição da fila enquanto cobre a vaga;
 4. durante uma partida, recebe `ParticipacaoPartida` no mesmo time;
 5. o titular continua `DESCANSANDO` e fora da fila;
 6. o painel mostra os dois no cartão: titular com `FORA` e substituto com
@@ -40,7 +40,7 @@ Ao mandar o titular voltar:
 
 1. a participação do substituto é encerrada;
 2. o vínculo temporário é desativado;
-3. o substituto entra no fim da fila, pois acabou de jogar;
+3. a posição do substituto na fila permanece inalterada;
 4. a participação do titular é reaberta;
 5. o titular volta para `JOGANDO`.
 
@@ -48,8 +48,8 @@ Ao mandar o titular voltar:
 
 ### Time permanece
 
-Os substitutos temporários do time que permanece saem do elenco e entram no fim
-da fila. O titular mantém sua vaga. Ao iniciar a próxima partida, titulares sem
+Os substitutos temporários do time que permanece saem do elenco e continuam na
+posição que já ocupavam na fila. O titular mantém sua vaga. Ao iniciar a próxima partida, titulares sem
 novo substituto voltam automaticamente para `JOGANDO`.
 
 Se o titular continuar fora, o organizador escolhe novamente quem o cobre antes
@@ -58,9 +58,9 @@ da partida não escala nem reativa o titular.
 
 ### Time sai
 
-O titular `DESCANSANDO` continua excluído da rotação e da fila. O substituto,
-que efetivamente jogou, participa normalmente da rotação como qualquer jogador
-do time que saiu.
+O titular `DESCANSANDO` continua excluído da rotação e da fila. O substituto
+continua elegível pela posição que já ocupava na fila e não pode ser duplicado
+ao participar da rotação do time que saiu.
 
 ## Troca do próprio substituto
 
@@ -80,14 +80,16 @@ usada; não haverá uma segunda tela ou funcionalidade paralela.
 Uma migration adiciona a coluna UUID nullable e a chave estrangeira com
 `ON DELETE SET NULL`, além de índice único parcial para impedir duas coberturas
 ativas do mesmo titular. Registros atuais permanecem vínculos permanentes porque
-a coluna nasce nula.
+a coluna nasce nula. Uma migration de reparo recoloca no fim da fila somente
+substitutos ativos removidos por versões anteriores; depois disso, novas
+coberturas preservam a posição original.
 
 ## Testes
 
 - troca de `DESCANSANDO` preserva titular e cria vínculo temporário;
-- retorno encerra substituto e o envia ao fim da fila;
+- retorno encerra substituto sem alterar sua posição na fila;
 - início não escala titular que possui substituto ativo;
-- time vencedor devolve substituto à fila e preserva titular;
+- time vencedor preserva a posição do substituto na fila e o titular;
 - time perdedor rotaciona substituto e ignora titular descansando;
 - troca do substituto propaga a relação temporária;
 - painel expõe titular e substituto sem duplicar fila;

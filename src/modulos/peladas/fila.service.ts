@@ -190,6 +190,15 @@ export class FilaService {
         'Quem entra precisa estar na fila',
       );
 
+    const entradaJaEmTime = await this.jogadoresTime.findOne({
+      where: { participanteId, ativo: true },
+    });
+    if (entradaJaEmTime)
+      throw new ErroRegraPelada(
+        'PARTICIPANTE_EM_TIME',
+        'Este jogador ja esta cobrindo ou ocupando uma vaga em outro time',
+      );
+
     const vaga = await this.jogadoresTime.findOne({
       where: { participanteId: saiId, ativo: true },
     });
@@ -201,7 +210,9 @@ export class FilaService {
     const participanteSai = await this.carregarParticipante(peladaId, saiId);
 
     return this.fonteDados.transaction(async (gerenciador) => {
-      if (participanteSai.status === StatusParticipantePelada.DESCANSANDO) {
+      const coberturaTemporaria =
+        participanteSai.status === StatusParticipantePelada.DESCANSANDO;
+      if (coberturaTemporaria) {
         // A vaga continua pertencendo a quem esta FORA. O novo membro e uma
         // cobertura temporaria, que pode ser devolvida sem inverter os dois
         // jogadores quando o titular retornar.
@@ -223,11 +234,16 @@ export class FilaService {
         });
       }
 
-      const nova = ordem.filter((id) => id !== participanteId);
+      // Cobrir quem esta FORA nao consome a vez de quem ajuda: ele continua
+      // na mesma posicao da fila enquanto joga temporariamente. Apenas uma
+      // troca definitiva remove quem entrou da fila.
+      const nova = coberturaTemporaria
+        ? [...ordem]
+        : ordem.filter((id) => id !== participanteId);
       // Quem saiu do time volta na frente da fila: perdeu a vez sem ter
       // pedido, entao e o proximo a entrar. A excecao e quem ja estava FORA:
       // continua descansando ate o organizador mandar voltar.
-      if (participanteSai.status !== StatusParticipantePelada.DESCANSANDO) {
+      if (!coberturaTemporaria) {
         nova.unshift(saiId);
       }
 
