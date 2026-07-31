@@ -31,6 +31,16 @@ export class JogadorTimeEntity {
   @ManyToOne(() => ParticipantePeladaEntity, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'participante_id' })
   participante: ParticipantePeladaEntity;
+
+  @Column({ type: 'uuid', nullable: true })
+  substituiParticipanteId: string | null;
+  @ManyToOne(() => ParticipantePeladaEntity, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
+  @JoinColumn({ name: 'substitui_participante_id' })
+  substituiParticipante: ParticipantePeladaEntity | null;
+
   @Column({ default: false }) ehGoleiro: boolean;
   @Column({ default: true }) ativo: boolean;
   @CreateDateColumn({ type: 'timestamptz' }) entrouEm: Date;
