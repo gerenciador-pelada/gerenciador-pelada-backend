@@ -85,4 +85,15 @@ export class PeladaEntity {
 
   @DeleteDateColumn({ type: 'timestamptz', nullable: true })
   deletadoEm: Date | null;
+
+  /**
+   * Token do link publico do ranking. Nulo = sem link ativo.
+   *
+   * Nullable de proposito: revogar e apagar o valor, e o link antigo passa a
+   * nao existir. Um token na URL vai parar no historico do navegador e na
+   * previa de link do WhatsApp, entao vale como segredo fraco — por isso
+   * precisa ser descartavel, e por isso da acesso apenas a classificacao.
+   */
+  @Column({ type: 'varchar', length: 64, nullable: true, unique: true })
+  tokenPublico: string | null;
 }
