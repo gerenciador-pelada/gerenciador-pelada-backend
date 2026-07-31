@@ -41,6 +41,7 @@ import { PainelService } from './painel.service';
 import { FilaService } from './fila.service';
 import { RankingPublicoService } from './ranking-publico.service';
 import { FinanceiroService } from './financeiro.service';
+import { EstatisticasGrupoService } from './estatisticas-grupo.service';
 import {
   DefinirValorCampoDto,
   MarcarPagamentoDto,
@@ -72,6 +73,7 @@ export class PeladasController {
     private readonly filaService: FilaService,
     private readonly rankingPublico_: RankingPublicoService,
     private readonly financeiro: FinanceiroService,
+    private readonly estatisticas: EstatisticasGrupoService,
   ) {}
 
   @Get(':id/painel')
@@ -204,6 +206,17 @@ export class PeladasController {
     @Query() filtro: FiltrarPeladasDto,
   ) {
     return this.peladas.listar(usuario.id, filtro);
+  }
+
+  // Fica sob /peladas e nao sob /grupos-pelada porque le partidas, times e
+  // participacoes — tudo que vive neste modulo.
+  @Get('/grupos/:grupoId/estatisticas')
+  @ApiOperation({ summary: 'Numeros do grupo ao longo da temporada' })
+  estatisticasDoGrupo(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('grupoId', ParseUUIDPipe) grupoId: string,
+  ) {
+    return this.estatisticas.doGrupo(u.id, grupoId);
   }
 
   @Get('/rankings') listarRankings(

@@ -30,6 +30,7 @@ describe('PeladasController', () => {
   const fila = {};
   const rankingPublico = {};
   const financeiro = {};
+  const estatisticas = {};
   const controller = new PeladasController(
     peladas as never,
     configuracoes as never,
@@ -43,6 +44,7 @@ describe('PeladasController', () => {
     fila as never,
     rankingPublico as never,
     financeiro as never,
+    estatisticas as never,
   );
 
   beforeEach(() => jest.resetAllMocks());

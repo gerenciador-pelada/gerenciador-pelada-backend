@@ -29,6 +29,7 @@ import { PainelService } from './painel.service';
 import { RankingPublicoService } from './ranking-publico.service';
 import { FilaService } from './fila.service';
 import { FinanceiroService } from './financeiro.service';
+import { EstatisticasGrupoService } from './estatisticas-grupo.service';
 
 @Module({
   imports: [
@@ -65,6 +66,7 @@ import { FinanceiroService } from './financeiro.service';
     RankingPublicoService,
     FilaService,
     FinanceiroService,
+    EstatisticasGrupoService,
   ],
   exports: [PeladasService, ConfiguracoesService],
 })
