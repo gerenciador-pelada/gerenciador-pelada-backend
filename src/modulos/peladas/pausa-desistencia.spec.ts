@@ -88,9 +88,9 @@ function criarServico(opcoes: {
           },
     ),
     create: jest.fn().mockImplementation((dados: unknown) => dados),
-    save: jest.fn().mockImplementation((dados: unknown) =>
-      Promise.resolve(dados),
-    ),
+    save: jest
+      .fn()
+      .mockImplementation((dados: unknown) => Promise.resolve(dados)),
     update: jest.fn().mockResolvedValue({}),
   };
 
