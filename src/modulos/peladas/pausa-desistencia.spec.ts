@@ -13,6 +13,7 @@ function criarServico(opcoes: {
   temTime?: boolean;
   partidaEmAndamento?: boolean;
   temSubstituto?: boolean;
+  titularSemParticipacao?: boolean;
 }) {
   const participante = {
     id: PARTICIPANTE,
@@ -77,6 +78,19 @@ function criarServico(opcoes: {
   };
   const participacoes = {
     count: jest.fn().mockResolvedValue(0),
+    findOne: jest.fn().mockResolvedValue(
+      opcoes.titularSemParticipacao
+        ? null
+        : {
+            id: 'pp-titular',
+            partidaId: 'partida-1',
+            participanteId: PARTICIPANTE,
+          },
+    ),
+    create: jest.fn().mockImplementation((dados: unknown) => dados),
+    save: jest.fn().mockImplementation((dados: unknown) =>
+      Promise.resolve(dados),
+    ),
     update: jest.fn().mockResolvedValue({}),
   };
 
@@ -209,6 +223,27 @@ describe('Pausa e desistência', () => {
       );
       expect(fila.save).not.toHaveBeenCalledWith(
         expect.objectContaining({ participanteId: PARTICIPANTE }),
+      );
+    });
+
+    it('cria a participacao ao voltar no meio do jogo seguinte', async () => {
+      const { servico, participacoes } = criarServico({
+        status: StatusParticipantePelada.DESCANSANDO,
+        temTime: true,
+        temSubstituto: true,
+        partidaEmAndamento: true,
+        titularSemParticipacao: true,
+      });
+
+      await servico.retornar(DONO, PELADA, PARTICIPANTE);
+
+      expect(participacoes.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          partidaId: 'partida-1',
+          participanteId: PARTICIPANTE,
+          timeId: 'time-casa',
+          saiuEm: null,
+        }),
       );
     });
   });

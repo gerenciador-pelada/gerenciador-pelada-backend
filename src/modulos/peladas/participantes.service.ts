@@ -250,10 +250,26 @@ export class ParticipantesService {
             { saiuEm: new Date() },
           );
         }
-        await this.participacoes.update(
-          { partidaId: partidaAtual.id, participanteId: id },
-          { saiuEm: null },
-        );
+        const participacaoTitular = await this.participacoes.findOne({
+          where: { partidaId: partidaAtual.id, participanteId: id },
+        });
+        if (participacaoTitular) {
+          await this.participacoes.update(
+            { partidaId: partidaAtual.id, participanteId: id },
+            { saiuEm: null },
+          );
+        } else {
+          await this.participacoes.save(
+            this.participacoes.create({
+              partidaId: partidaAtual.id,
+              participanteId: id,
+              timeId: emTime.timeId,
+              ehGoleiro: emTime.ehGoleiro ?? false,
+              saiuEm: null,
+              minutosJogados: null,
+            }),
+          );
+        }
       }
     }
 
