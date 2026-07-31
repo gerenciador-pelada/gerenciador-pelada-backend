@@ -6,7 +6,7 @@ import { PeladaEntity } from '../../banco/entidades/pelada.entity';
 import { LinhaRanking, RankingsService } from './rankings.service';
 
 export interface RankingPublico {
-  pelada: { nome: string; data: Date };
+  grupo: { nome: string; edicoes: number };
   ranking: LinhaRanking[];
 }
 
@@ -61,14 +61,25 @@ export class RankingPublicoService {
   async porToken(token: string): Promise<RankingPublico> {
     const pelada = await this.peladas.findOne({
       where: { tokenPublico: token, deletadoEm: IsNull() },
+      relations: ['grupo'],
     });
     // 404 e nao 403: um 403 confirmaria que aquele token ja existiu, o que
     // ajuda quem esta chutando valores.
     if (!pelada) throw new NotFoundException('Link nao encontrado');
 
+    // Soma todas as edicoes do grupo, e nao so a noite em que o link nasceu:
+    // o que interessa a quem joga toda semana e a classificacao acumulada.
+    // Por isso o link tambem nao envelhece — ele acompanha a temporada.
+    const [ranking, edicoes] = await Promise.all([
+      this.rankings.listar(pelada.organizadorId, undefined, pelada.grupoId),
+      this.peladas.count({
+        where: { grupoId: pelada.grupoId, deletadoEm: IsNull() },
+      }),
+    ]);
+
     return {
-      pelada: { nome: pelada.nome, data: pelada.dataHora },
-      ranking: await this.rankings.listar(pelada.organizadorId, pelada.id),
+      grupo: { nome: pelada.grupo?.nome ?? pelada.nome, edicoes },
+      ranking,
     };
   }
 

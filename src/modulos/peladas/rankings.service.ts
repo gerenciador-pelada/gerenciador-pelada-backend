@@ -65,7 +65,11 @@ export class RankingsService {
    * O innerJoin com peladas nao e opcional: sem ele a agregacao somaria a
    * pontuacao de todos os organizadores do sistema numa unica tabela.
    */
-  async listar(usuarioId: string, peladaId?: string): Promise<LinhaRanking[]> {
+  async listar(
+    usuarioId: string,
+    peladaId?: string,
+    grupoId?: string,
+  ): Promise<LinhaRanking[]> {
     if (peladaId) {
       await this.acesso.garantirPelada(usuarioId, peladaId);
     }
@@ -85,13 +89,16 @@ export class RankingsService {
       .addGroupBy('jogador.apelido');
 
     if (peladaId) pontuacao.andWhere('p.peladaId = :peladaId', { peladaId });
+    // Filtrar por grupo soma todas as edicoes daquela pelada: e o numero que
+    // interessa na temporada, e nao o de uma noite isolada.
+    if (grupoId) pontuacao.andWhere('pelada.grupoId = :grupoId', { grupoId });
 
     const linhas = await pontuacao.getRawMany<LinhaPontuacao>();
     if (linhas.length === 0) return [];
 
     const [contagens, assistencias] = await Promise.all([
-      this.contarEventos(usuarioId, peladaId),
-      this.contarAssistencias(usuarioId, peladaId),
+      this.contarEventos(usuarioId, peladaId, grupoId),
+      this.contarAssistencias(usuarioId, peladaId, grupoId),
     ]);
 
     return linhas
@@ -121,6 +128,7 @@ export class RankingsService {
   private async contarEventos(
     usuarioId: string,
     peladaId?: string,
+    grupoId?: string,
   ): Promise<Map<string, number>> {
     const consulta = this.eventos
       .createQueryBuilder('e')
@@ -139,6 +147,7 @@ export class RankingsService {
 
     if (peladaId)
       consulta.andWhere('participante.peladaId = :peladaId', { peladaId });
+    if (grupoId) consulta.andWhere('pelada.grupoId = :grupoId', { grupoId });
 
     const linhas = await consulta.getRawMany<LinhaContagem>();
     return new Map(
@@ -150,6 +159,7 @@ export class RankingsService {
   private async contarAssistencias(
     usuarioId: string,
     peladaId?: string,
+    grupoId?: string,
   ): Promise<Map<string, number>> {
     const consulta = this.eventos
       .createQueryBuilder('e')
@@ -167,6 +177,7 @@ export class RankingsService {
 
     if (peladaId)
       consulta.andWhere('participante.peladaId = :peladaId', { peladaId });
+    if (grupoId) consulta.andWhere('pelada.grupoId = :grupoId', { grupoId });
 
     const linhas = await consulta.getRawMany<LinhaAssistencia>();
     return new Map(linhas.map((l) => [l.jogadorId, paraNumero(l.total)]));
