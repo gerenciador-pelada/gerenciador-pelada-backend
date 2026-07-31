@@ -6,11 +6,13 @@ import { ParticipantesService } from './participantes.service';
 const DONO = 'usuario-1';
 const PELADA = 'pelada-1';
 const PARTICIPANTE = 'p1';
+const SUBSTITUTO = 'p-substituto';
 
 function criarServico(opcoes: {
   status?: StatusParticipantePelada;
   temTime?: boolean;
   partidaEmAndamento?: boolean;
+  temSubstituto?: boolean;
 }) {
   const participante = {
     id: PARTICIPANTE,
@@ -23,6 +25,7 @@ function criarServico(opcoes: {
   const participantes = {
     findOne: jest.fn().mockResolvedValue(participante),
     save: jest.fn().mockImplementation((p: unknown) => Promise.resolve(p)),
+    update: jest.fn().mockResolvedValue({}),
   };
   const fila = {
     findOne: jest.fn().mockResolvedValue(null),
@@ -40,9 +43,25 @@ function criarServico(opcoes: {
   const jogadoresTime = {
     findOne: jest
       .fn()
-      .mockResolvedValue(
-        opcoes.temTime ? { id: 'jt1', timeId: 'time-casa', ativo: true } : null,
-      ),
+      .mockImplementation((consulta: { where: Record<string, unknown> }) => {
+        if ('substituiParticipanteId' in consulta.where) {
+          return Promise.resolve(
+            opcoes.temSubstituto
+              ? {
+                  id: 'jt-substituto',
+                  participanteId: SUBSTITUTO,
+                  timeId: 'time-casa',
+                  ativo: true,
+                }
+              : null,
+          );
+        }
+        return Promise.resolve(
+          opcoes.temTime
+            ? { id: 'jt1', timeId: 'time-casa', ativo: true }
+            : null,
+        );
+      }),
     update: jest.fn().mockResolvedValue({}),
   };
   const partidas = {
@@ -155,6 +174,42 @@ describe('Pausa e desistência', () => {
 
       expect(p.status).toBe(StatusParticipantePelada.PRESENTE);
       expect(fila.save).toHaveBeenCalled();
+    });
+
+    it('retoma a vaga e manda o substituto para o fim da fila', async () => {
+      const { servico, fila, jogadoresTime, participacoes, participantes } =
+        criarServico({
+          status: StatusParticipantePelada.DESCANSANDO,
+          temTime: true,
+          temSubstituto: true,
+          partidaEmAndamento: true,
+        });
+
+      await servico.retornar(DONO, PELADA, PARTICIPANTE);
+
+      expect(jogadoresTime.update).toHaveBeenCalledWith(
+        'jt-substituto',
+        expect.objectContaining({ ativo: false }),
+      );
+      expect(participacoes.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          partidaId: 'partida-1',
+          participanteId: SUBSTITUTO,
+        }),
+        expect.objectContaining({ saiuEm: expect.any(Date) }),
+      );
+      expect(participantes.update).toHaveBeenCalledWith(SUBSTITUTO, {
+        status: StatusParticipantePelada.PRESENTE,
+      });
+      expect(fila.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          participanteId: SUBSTITUTO,
+          posicao: 1,
+        }),
+      );
+      expect(fila.save).not.toHaveBeenCalledWith(
+        expect.objectContaining({ participanteId: PARTICIPANTE }),
+      );
     });
   });
 

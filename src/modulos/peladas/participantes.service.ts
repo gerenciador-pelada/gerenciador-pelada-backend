@@ -219,6 +219,11 @@ export class ParticipantesService {
     const emTime = await this.jogadoresTime.findOne({
       where: { participanteId: id, ativo: true },
     });
+    const substituto = emTime
+      ? await this.jogadoresTime.findOne({
+          where: { substituiParticipanteId: id, ativo: true },
+        })
+      : null;
     p.status = emTime
       ? StatusParticipantePelada.JOGANDO
       : StatusParticipantePelada.PRESENTE;
@@ -235,9 +240,54 @@ export class ParticipantesService {
           emTime.timeId,
         );
       if (partidaAtual && pertenceAoConfronto) {
+        if (substituto) {
+          await this.participacoes.update(
+            {
+              partidaId: partidaAtual.id,
+              participanteId: substituto.participanteId,
+              saiuEm: IsNull(),
+            },
+            { saiuEm: new Date() },
+          );
+        }
         await this.participacoes.update(
           { partidaId: partidaAtual.id, participanteId: id },
           { saiuEm: null },
+        );
+      }
+    }
+
+    if (substituto) {
+      const agora = new Date();
+      await this.jogadoresTime.update(substituto.id, {
+        ativo: false,
+        saiuEm: agora,
+      });
+      await this.participantes.update(substituto.participanteId, {
+        status: StatusParticipantePelada.PRESENTE,
+      });
+
+      const jaNaFila = await this.fila.findOne({
+        where: {
+          peladaId,
+          participanteId: substituto.participanteId,
+          ativo: true,
+        },
+      });
+      if (!jaNaFila) {
+        const ultima = await this.fila
+          .createQueryBuilder('f')
+          .select('COALESCE(MAX(f.posicao), 0)', 'maximo')
+          .where('f.peladaId = :peladaId AND f.ativo = true', { peladaId })
+          .getRawOne<{ maximo: string }>();
+        await this.fila.save(
+          this.fila.create({
+            peladaId,
+            participanteId: substituto.participanteId,
+            posicao: Number(ultima?.maximo ?? 0) + 1,
+            ativo: true,
+            saiuEm: null,
+          }),
         );
       }
     }

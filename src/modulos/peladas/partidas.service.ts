@@ -1,6 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, In, IsNull, Repository } from 'typeorm';
+import {
+  DataSource,
+  EntityManager,
+  In,
+  IsNull,
+  Not,
+  Repository,
+} from 'typeorm';
 import { ConfiguracaoPeladaEntity } from '../../banco/entidades/configuracao-pelada.entity';
 import { EventoPartidaEntity } from '../../banco/entidades/evento-partida.entity';
 import { FilaJogadorEntity } from '../../banco/entidades/fila-jogador.entity';
@@ -76,7 +83,17 @@ export class PartidasService {
           { timeId: partida.timeVisitanteId, ativo: true },
         ],
       });
-      const idsElenco = new Set(elenco.map((membro) => membro.participanteId));
+      const titularesCobertos = new Set(
+        elenco
+          .map((membro) => membro.substituiParticipanteId)
+          .filter((id): id is string => Boolean(id)),
+      );
+      const elencoEmCampo = elenco.filter(
+        (membro) => !titularesCobertos.has(membro.participanteId),
+      );
+      const idsElenco = new Set(
+        elencoEmCampo.map((membro) => membro.participanteId),
+      );
       if (idsElenco.size) {
         await gerenciador.update(
           ParticipantePeladaEntity,
@@ -104,7 +121,7 @@ export class PartidasService {
 
       await gerenciador.save(
         [
-          ...elenco.map((membro) => ({
+          ...elencoEmCampo.map((membro) => ({
             participanteId: membro.participanteId,
             timeId: membro.timeId,
             ehGoleiro: membro.ehGoleiro,
@@ -659,6 +676,24 @@ export class PartidasService {
     const permanece = [casa, visitante].find(
       (t) => !saem.some((s) => s.id === t.id),
     );
+    const substitutosTemporarios = permanece
+      ? await gerenciador.find(JogadorTimeEntity, {
+          where: {
+            timeId: permanece.id,
+            ativo: true,
+            substituiParticipanteId: Not(IsNull()),
+          },
+        })
+      : [];
+    const substitutosQueVoltamFila = substitutosTemporarios.map((membro) => {
+      const jogador = permanece?.jogadores.find(
+        (item) => item.id === membro.participanteId,
+      );
+      return {
+        id: membro.participanteId,
+        ordemChegada: jogador?.ordemChegada ?? Number.MAX_SAFE_INTEGER,
+      };
+    });
 
     // Goleiro fixo nao entra na rotacao: ele fica no gol e o time que assume o
     // lado dele herda o goleiro. Sem isto o goleiro era dissolvido junto com o
@@ -688,6 +723,20 @@ export class PartidasService {
     }
 
     if (permanece) {
+      const agora = new Date();
+      for (const substituto of substitutosTemporarios) {
+        await gerenciador.update(JogadorTimeEntity, substituto.id, {
+          ativo: false,
+          saiuEm: agora,
+        });
+      }
+      if (substitutosTemporarios.length) {
+        await gerenciador.update(
+          ParticipantePeladaEntity,
+          { id: In(substitutosTemporarios.map((j) => j.participanteId)) },
+          { status: StatusParticipantePelada.PRESENTE },
+        );
+      }
       const venceu = !empatou;
       await gerenciador.update(TimeEntity, permanece.id, {
         partidasConsecutivas: permanece.partidasConsecutivas + 1,
@@ -713,6 +762,11 @@ export class PartidasService {
       ...jogadoresQueSaem
         .filter((j) => !complemento.some((c) => c.id === j.id))
         .sort((a, b) => a.ordemChegada - b.ordemChegada),
+      ...substitutosQueVoltamFila.filter(
+        (substituto) =>
+          !fila.some((jogador) => jogador.id === substituto.id) &&
+          !jogadoresQueSaem.some((jogador) => jogador.id === substituto.id),
+      ),
     ];
 
     await gerenciador.delete(FilaJogadorEntity, { peladaId: partida.peladaId });

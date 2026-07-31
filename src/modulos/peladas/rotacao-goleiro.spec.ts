@@ -33,14 +33,32 @@ const PARTICIPANTES: Record<
   gkB: { id: 'gkB', ordemChegada: 101, ehGoleiroFixo: true },
   f1: { id: 'f1', ordemChegada: 5, ehGoleiroFixo: false },
   f2: { id: 'f2', ordemChegada: 6, ehGoleiroFixo: false },
+  subA: { id: 'subA', ordemChegada: 7, ehGoleiroFixo: false },
 };
 
 function criarAmbiente(
-  opcoes: { semGoleiroFixo?: boolean; descansando?: string } = {},
+  opcoes: {
+    semGoleiroFixo?: boolean;
+    descansando?: string;
+    substitutoTemporario?: boolean;
+  } = {},
 ) {
-  const elenco = opcoes.semGoleiroFixo
+  const elencoBase = opcoes.semGoleiroFixo
     ? ELENCO.filter((e) => !e.ehGoleiro)
     : ELENCO;
+  const elenco = opcoes.substitutoTemporario
+    ? [
+        ...elencoBase,
+        {
+          id: 'jt-sub-a',
+          timeId: 'time-a',
+          participanteId: 'subA',
+          substituiParticipanteId: 'a1',
+          ehGoleiro: false,
+          ativo: true,
+        },
+      ]
+    : elencoBase;
   const participantesBase = opcoes.semGoleiroFixo
     ? Object.fromEntries(
         Object.entries(PARTICIPANTES).map(([k, v]) => [
@@ -95,7 +113,16 @@ function criarAmbiente(
         const ids = Array.isArray(onde)
           ? onde.map((x) => x.timeId)
           : [onde.timeId];
-        return Promise.resolve(elenco.filter((e) => ids.includes(e.timeId)));
+        const encontrados = elenco.filter((e) => ids.includes(e.timeId));
+        return Promise.resolve(
+          !Array.isArray(onde) && 'substituiParticipanteId' in onde
+            ? encontrados.filter(
+                (e) =>
+                  'substituiParticipanteId' in e &&
+                  Boolean(e.substituiParticipanteId),
+              )
+            : encontrados,
+        );
       }
       if (entidade === FilaJogadorEntity) {
         return Promise.resolve([
@@ -235,6 +262,27 @@ describe('Rotação com goleiro fixo', () => {
 
     expect(jogadoresTimeSalvos.map((j) => j.participanteId)).not.toContain(
       'gkB',
+    );
+  });
+
+  it('manda o substituto do time vencedor ao fim e devolve a vaga ao titular', async () => {
+    const { servico, filaSalva, gerenciador } = criarAmbiente({
+      descansando: 'a1',
+      substitutoTemporario: true,
+    });
+
+    await servico.finalizar(DONO, PARTIDA);
+
+    expect(filaSalva.map((f) => f.participanteId)).toEqual([
+      'b1',
+      'b2',
+      'subA',
+    ]);
+    expect(filaSalva.map((f) => f.participanteId)).not.toContain('a1');
+    expect(gerenciador.update).toHaveBeenCalledWith(
+      JogadorTimeEntity,
+      'jt-sub-a',
+      expect.objectContaining({ ativo: false }),
     );
   });
 });

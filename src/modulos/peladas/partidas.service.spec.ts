@@ -317,6 +317,54 @@ describe('PartidasService', () => {
       );
     });
 
+    it('inicia com o substituto e mantem o titular descansando fora de campo', async () => {
+      const { repositorio } = criarRepositorio(DONO, StatusPartida.AGUARDANDO);
+      const salvos: unknown[] = [];
+      const gerenciador = {
+        find: jest.fn().mockResolvedValue([
+          {
+            timeId: 'time-a',
+            participanteId: 'titular-fora',
+            substituiParticipanteId: null,
+            ehGoleiro: false,
+          },
+          {
+            timeId: 'time-a',
+            participanteId: 'substituto',
+            substituiParticipanteId: 'titular-fora',
+            ehGoleiro: false,
+          },
+          {
+            timeId: 'time-b',
+            participanteId: 'adversario',
+            substituiParticipanteId: null,
+            ehGoleiro: false,
+          },
+        ] as Partial<JogadorTimeEntity>[]),
+        create: jest.fn().mockImplementation((_e, dados: unknown) => dados),
+        update: jest.fn().mockResolvedValue({}),
+        save: jest.fn().mockImplementation((dados: unknown) => {
+          salvos.push(dados);
+          return Promise.resolve(dados);
+        }),
+      };
+      const servico = new PartidasService(
+        repositorio as never,
+        criarFonteDados(gerenciador),
+      );
+
+      await servico.iniciar(DONO, PARTIDA);
+
+      const participacoes = salvos[0] as ParticipacaoPartidaEntity[];
+      expect(participacoes.map((p) => p.participanteId)).toEqual([
+        'substituto',
+        'adversario',
+      ]);
+      expect(participacoes.map((p) => p.participanteId)).not.toContain(
+        'titular-fora',
+      );
+    });
+
     it('recusa iniciar partida que nao esta aguardando', async () => {
       const { repositorio } = criarRepositorio(
         DONO,
