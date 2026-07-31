@@ -40,6 +40,9 @@ import { SubstituirJogadorDto } from './dto/substituir-jogador.dto';
 import { TrocarJogadoresDto } from './dto/trocar-jogadores.dto';
 import { PainelService } from './painel.service';
 import { FilaService } from './fila.service';
+import { RankingPublicoService } from './ranking-publico.service';
+import { Publico } from '../../comum/decoradores/publico.decorator';
+import { Throttle } from '@nestjs/throttler';
 import {
   AdicionarNaFilaDto,
   EntrarNoLugarDeDto,
@@ -62,6 +65,7 @@ export class PeladasController {
     private readonly historico: HistoricoService,
     private readonly painel: PainelService,
     private readonly filaService: FilaService,
+    private readonly rankingPublico_: RankingPublicoService,
   ) {}
 
   @Get(':id/painel')
@@ -393,6 +397,34 @@ export class PeladasController {
 
   // A fila dos proximos e outra coisa que a ordem de chegada: depois que a
   // pelada comeca, e a `posicao` da fila que decide quem entra.
+  // A unica rota do sistema que responde sem token alem de login e cadastro.
+  // Limite apertado: e a unica superficie onde alguem pode martelar tokens.
+  @Publico()
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
+  @Get('/publico/ranking/:token')
+  @ApiOperation({ summary: 'Ranking pelo link publico, sem autenticacao' })
+  rankingPublico(@Param('token') token: string) {
+    return this.rankingPublico_.porToken(token);
+  }
+
+  @Post(':id/link-ranking')
+  @ApiOperation({ summary: 'Cria (ou devolve) o link publico do ranking' })
+  gerarLinkRanking(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.rankingPublico_.gerar(u.id, id).then((token) => ({ token }));
+  }
+
+  @Delete(':id/link-ranking')
+  @ApiOperation({ summary: 'Revoga o link publico do ranking' })
+  revogarLinkRanking(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.rankingPublico_.revogar(u.id, id);
+  }
+
   @Patch(':id/fila')
   @ApiOperation({ summary: 'Reordena a fila dos proximos' })
   reordenarFila(

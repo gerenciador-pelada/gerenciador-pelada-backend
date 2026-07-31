@@ -26,6 +26,7 @@ import { AcessoPeladaService } from './acesso-pelada.service';
 import { TimeEntity } from '../../banco/entidades/time.entity';
 import { JogadorTimeEntity } from '../../banco/entidades/jogador-time.entity';
 import { PainelService } from './painel.service';
+import { RankingPublicoService } from './ranking-publico.service';
 import { FilaService } from './fila.service';
 
 @Module({
@@ -60,6 +61,7 @@ import { FilaService } from './fila.service';
     RankingsService,
     HistoricoService,
     PainelService,
+    RankingPublicoService,
     FilaService,
   ],
   exports: [PeladasService, ConfiguracoesService],
