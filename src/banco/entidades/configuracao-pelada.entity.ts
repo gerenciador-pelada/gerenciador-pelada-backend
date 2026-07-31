@@ -65,7 +65,11 @@ export class ConfiguracaoPeladaEntity {
 
   // --- partida ---
 
-  @Column({ type: 'int', default: 20 })
+  /**
+   * Teto de gente na edicao. E so uma trava de seguranca contra digitacao
+   * errada — 20 barrava peladas grandes de verdade, que existem.
+   */
+  @Column({ type: 'int', default: 40 })
   maximoJogadores: number;
 
   @Column({ type: 'int', default: 10 })

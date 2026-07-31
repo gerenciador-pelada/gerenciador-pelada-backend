@@ -3,6 +3,7 @@ import { AdicionarGoleirosAvulsosPartida1785427000000 } from './migracoes/178542
 import { AdicionarPausaNaPartida1785500000000 } from './migracoes/1785500000000-AdicionarPausaNaPartida';
 import { AdicionarTokenPublicoPelada1785510000000 } from './migracoes/1785510000000-AdicionarTokenPublicoPelada';
 import { AdicionarAcertoFinanceiro1785520000000 } from './migracoes/1785520000000-AdicionarAcertoFinanceiro';
+import { AumentarMaximoJogadoresPadrao1785530000000 } from './migracoes/1785530000000-AumentarMaximoJogadoresPadrao';
 import { AdicionarSubstituicaoTemporaria1785530000000 } from './migracoes/1785530000000-AdicionarSubstituicaoTemporaria';
 import { RepararFilaSubstitutosTemporarios1785540000000 } from './migracoes/1785540000000-RepararFilaSubstitutosTemporarios';
 import { AdicionarVencedorDecisaoPartida1785425000000 } from './migracoes/1785425000000-AdicionarVencedorDecisaoPartida';
@@ -43,6 +44,7 @@ export const MIGRACOES = [
   AdicionarPausaNaPartida1785500000000,
   AdicionarTokenPublicoPelada1785510000000,
   AdicionarAcertoFinanceiro1785520000000,
+  AumentarMaximoJogadoresPadrao1785530000000,
   AdicionarSubstituicaoTemporaria1785530000000,
   RepararFilaSubstitutosTemporarios1785540000000,
 ];
