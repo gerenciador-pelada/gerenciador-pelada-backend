@@ -1,5 +1,6 @@
 import { DataSource, EntityManager, FindOptionsWhere } from 'typeorm';
 import { FilaJogadorEntity } from '../../banco/entidades/fila-jogador.entity';
+import { JogadorTimeEntity } from '../../banco/entidades/jogador-time.entity';
 import { ParticipantePeladaEntity } from '../../banco/entidades/participante-pelada.entity';
 import { StatusParticipantePelada } from '../../comum/enums/status-participante-pelada.enum';
 import { StatusPelada } from '../../comum/enums/status-pelada.enum';
@@ -140,7 +141,7 @@ describe('FilaService', () => {
     expect(gerenciador.save).not.toHaveBeenCalled();
   });
 
-  it('nao enfileira quem perde a vaga enquanto continua descansando', async () => {
+  it('preserva a vaga e registra quem cobre o jogador descansando', async () => {
     const salvos: unknown[] = [];
     const gerenciador = {
       update: jest.fn().mockResolvedValue({}),
@@ -178,7 +179,9 @@ describe('FilaService', () => {
       {
         findOne: jest.fn().mockResolvedValue({
           id: 'vaga-1',
+          timeId: 'time-a',
           participanteId: 'fora',
+          ehGoleiro: false,
           ativo: true,
         }),
       } as never,
@@ -191,6 +194,19 @@ describe('FilaService', () => {
 
     await servico.entrarNoLugarDe(DONO, PELADA, 'entra', 'fora');
 
+    expect(gerenciador.update).not.toHaveBeenCalledWith(
+      JogadorTimeEntity,
+      'vaga-1',
+      expect.anything(),
+    );
+    expect(salvos).toContainEqual(
+      expect.objectContaining({
+        timeId: 'time-a',
+        participanteId: 'entra',
+        substituiParticipanteId: 'fora',
+        ativo: true,
+      }),
+    );
     expect(
       salvos.flat().some((item) => {
         const registro = item as { participanteId?: string };

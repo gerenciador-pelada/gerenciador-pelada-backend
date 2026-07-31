@@ -433,6 +433,11 @@ export class PartidasService {
       const timeId = participacaoSai?.timeId ?? membroSai!.timeId;
       const ehGoleiro =
         membroSai?.ehGoleiro ?? participacaoSai?.ehGoleiro ?? false;
+      const substituiParticipanteId =
+        membroSai?.substituiParticipanteId ??
+        (estavaDescansando ? saiId : null);
+      const preservaVagaTitular =
+        estavaDescansando && !membroSai?.substituiParticipanteId;
 
       // Sai do time e da partida, guardando quando saiu.
       const agora = new Date();
@@ -443,7 +448,7 @@ export class PartidasService {
           { saiuEm: agora },
         );
       }
-      if (membroSai) {
+      if (membroSai && !preservaVagaTitular) {
         await gerenciador.update(JogadorTimeEntity, membroSai.id, {
           ativo: false,
           saiuEm: agora,
@@ -455,6 +460,7 @@ export class PartidasService {
         gerenciador.create(JogadorTimeEntity, {
           timeId,
           participanteId: entraId,
+          substituiParticipanteId,
           ehGoleiro,
           ativo: true,
           saiuEm: null,

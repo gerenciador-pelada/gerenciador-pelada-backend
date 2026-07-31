@@ -201,11 +201,27 @@ export class FilaService {
     const participanteSai = await this.carregarParticipante(peladaId, saiId);
 
     return this.fonteDados.transaction(async (gerenciador) => {
-      // Quem entra assume a vaga exata de quem sai, inclusive a condicao de
-      // goleiro: o time nao pode ficar sem goleiro por causa de uma troca.
-      await gerenciador.update(JogadorTimeEntity, vaga.id, {
-        participanteId,
-      });
+      if (participanteSai.status === StatusParticipantePelada.DESCANSANDO) {
+        // A vaga continua pertencendo a quem esta FORA. O novo membro e uma
+        // cobertura temporaria, que pode ser devolvida sem inverter os dois
+        // jogadores quando o titular retornar.
+        await gerenciador.save(
+          gerenciador.create(JogadorTimeEntity, {
+            timeId: vaga.timeId,
+            participanteId,
+            substituiParticipanteId: saiId,
+            ehGoleiro: vaga.ehGoleiro,
+            ativo: true,
+            saiuEm: null,
+          }),
+        );
+      } else {
+        // Na troca comum, quem entra assume a vaga exata de quem sai,
+        // inclusive a condicao de goleiro.
+        await gerenciador.update(JogadorTimeEntity, vaga.id, {
+          participanteId,
+        });
+      }
 
       const nova = ordem.filter((id) => id !== participanteId);
       // Quem saiu do time volta na frente da fila: perdeu a vez sem ter

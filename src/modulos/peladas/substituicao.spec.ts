@@ -19,9 +19,11 @@ function criarAmbiente(opcoes: {
   entraJaEmCampo?: boolean;
   saiEhGoleiro?: boolean;
   saiDescansando?: boolean;
+  saiSubstituiParticipanteId?: string;
 }) {
   const salvos: Record<string, unknown>[] = [];
-  const atualizados: { entidade: unknown; dados: unknown }[] = [];
+  const atualizados: { entidade: unknown; alvo: unknown; dados: unknown }[] =
+    [];
 
   const gerenciador = {
     findOne: jest
@@ -46,6 +48,8 @@ function criarAmbiente(opcoes: {
             id: 'jt1',
             timeId: 'time-a',
             ehGoleiro: opcoes.saiEhGoleiro ?? false,
+            substituiParticipanteId:
+              opcoes.saiSubstituiParticipanteId ?? null,
           });
         if (entidade === ParticipantePeladaEntity)
           return Promise.resolve({
@@ -56,8 +60,8 @@ function criarAmbiente(opcoes: {
           });
         return Promise.resolve(null);
       }),
-    update: jest.fn().mockImplementation((entidade, _id, dados: unknown) => {
-      atualizados.push({ entidade, dados });
+    update: jest.fn().mockImplementation((entidade, alvo, dados: unknown) => {
+      atualizados.push({ entidade, alvo, dados });
       return Promise.resolve({});
     }),
     create: jest.fn().mockImplementation((_e, dados: unknown) => dados),
@@ -155,7 +159,7 @@ describe('Substituição durante a partida', () => {
   });
 
   it('substitui a vaga preservada sem enfileirar quem continua descansando', async () => {
-    const { servico, salvos } = criarAmbiente({
+    const { servico, salvos, atualizados } = criarAmbiente({
       saiEmCampo: false,
       saiDescansando: true,
     });
@@ -164,13 +168,42 @@ describe('Substituição durante a partida', () => {
 
     expect(resultado).toEqual({ saiu: SAI, entrou: ENTRA, ehGoleiro: false });
     expect(
-      salvos.some(
-        (item) => item.participanteId === ENTRA && item.timeId === 'time-a',
+      salvos.some((item) =>
+        Object.entries({
+          participanteId: ENTRA,
+          timeId: 'time-a',
+          substituiParticipanteId: SAI,
+        }).every(([chave, valor]) => item[chave] === valor),
       ),
     ).toBe(true);
     expect(
+      atualizados.some(
+        (item) =>
+          item.entidade === JogadorTimeEntity && item.alvo === 'jt1',
+      ),
+    ).toBe(false);
+    expect(
       salvos.some((item) => item.participanteId === SAI && 'posicao' in item),
     ).toBe(false);
+  });
+
+  it('mantem o titular original ao trocar um substituto por outro', async () => {
+    const titular = 'p-titular';
+    const { servico, salvos } = criarAmbiente({
+      saiSubstituiParticipanteId: titular,
+    });
+
+    await servico.substituir(DONO, PARTIDA, SAI, ENTRA);
+
+    expect(salvos).toContainEqual(
+      expect.objectContaining({
+        participanteId: ENTRA,
+        substituiParticipanteId: titular,
+      }),
+    );
+    expect(salvos).toContainEqual(
+      expect.objectContaining({ participanteId: SAI, posicao: 4 }),
+    );
   });
 
   it('recusa quando quem sai nao esta em campo', async () => {
