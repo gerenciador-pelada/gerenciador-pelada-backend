@@ -139,4 +139,63 @@ describe('FilaService', () => {
     ).rejects.toBeInstanceOf(ErroRegraPelada);
     expect(gerenciador.save).not.toHaveBeenCalled();
   });
+
+  it('nao enfileira quem perde a vaga enquanto continua descansando', async () => {
+    const salvos: unknown[] = [];
+    const gerenciador = {
+      update: jest.fn().mockResolvedValue({}),
+      delete: jest.fn().mockResolvedValue({}),
+      create: jest
+        .fn()
+        .mockImplementation((_e: unknown, dados: unknown) => dados),
+      save: jest.fn().mockImplementation((dados: unknown) => {
+        salvos.push(dados);
+        return Promise.resolve(dados);
+      }),
+      find: jest.fn().mockResolvedValue([]),
+    };
+    const servico = new FilaService(
+      {
+        findOne: jest.fn().mockResolvedValue({
+          id: PELADA,
+          status: StatusPelada.EM_ANDAMENTO,
+        }),
+      } as never,
+      {
+        findOne: jest.fn().mockResolvedValue({
+          id: 'fora',
+          peladaId: PELADA,
+          status: StatusParticipantePelada.DESCANSANDO,
+        }),
+      } as never,
+      {
+        find: jest
+          .fn()
+          .mockResolvedValue([
+            { participanteId: 'entra', ativo: true, posicao: 1 },
+          ]),
+      } as never,
+      {
+        findOne: jest.fn().mockResolvedValue({
+          id: 'vaga-1',
+          participanteId: 'fora',
+          ativo: true,
+        }),
+      } as never,
+      { findOne: jest.fn().mockResolvedValue(null) } as never,
+      {
+        transaction: (acao: (manager: EntityManager) => Promise<unknown>) =>
+          acao(gerenciador as unknown as EntityManager),
+      } as unknown as DataSource,
+    );
+
+    await servico.entrarNoLugarDe(DONO, PELADA, 'entra', 'fora');
+
+    expect(
+      salvos.flat().some((item) => {
+        const registro = item as { participanteId?: string };
+        return registro.participanteId === 'fora';
+      }),
+    ).toBe(false);
+  });
 });

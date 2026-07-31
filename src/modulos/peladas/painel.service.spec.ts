@@ -1,5 +1,6 @@
 import { RegraEmpate } from '../../comum/enums/regra-empate.enum';
 import { StatusPartida } from '../../comum/enums/status-partida.enum';
+import { StatusParticipantePelada } from '../../comum/enums/status-participante-pelada.enum';
 import { StatusPelada } from '../../comum/enums/status-pelada.enum';
 import { PainelService } from './painel.service';
 
@@ -231,5 +232,92 @@ describe('PainelService', () => {
     expect(eventos.find).toHaveBeenCalledWith(
       expect.objectContaining({ where: { partidaId: PARTIDA } }),
     );
+  });
+
+  it('marca quem esta fora no time e separa apenas descansando sem vaga', async () => {
+    const partida = {
+      id: PARTIDA,
+      peladaId: PELADA,
+      numero: 4,
+      status: StatusPartida.EM_ANDAMENTO,
+      timeCasaId: CASA,
+      timeVisitanteId: VISITANTE,
+      golsCasa: 1,
+      golsVisitante: 0,
+      goleiroCasaId: null,
+      goleiroVisitanteId: null,
+    };
+    const participantes = [
+      {
+        id: 'fora-com-vaga',
+        status: StatusParticipantePelada.DESCANSANDO,
+        ordemChegada: 1,
+        ehGoleiroFixo: false,
+        jogador: { nome: 'Ana', apelido: null },
+      },
+      {
+        id: 'fora-sem-vaga',
+        status: StatusParticipantePelada.DESCANSANDO,
+        ordemChegada: 2,
+        ehGoleiroFixo: false,
+        jogador: { nome: 'Bia', apelido: null },
+      },
+    ];
+    const servico = new PainelService(
+      {
+        findOne: jest.fn().mockResolvedValue({
+          id: PELADA,
+          nome: 'Pelada',
+          status: StatusPelada.EM_ANDAMENTO,
+          local: null,
+          configuracao: {
+            jogadoresLinhaPorTime: 1,
+            duracaoPartidaMinutos: 10,
+            maximoGols: null,
+            permiteEmpate: true,
+            regraEmpate: RegraEmpate.AMBOS_SAEM,
+          },
+        }),
+      } as never,
+      { findOne: jest.fn().mockResolvedValue(partida) } as never,
+      {
+        find: jest.fn().mockResolvedValue([
+          { id: CASA, nome: 'Casa', cor: null, vitoriasConsecutivas: 1 },
+          {
+            id: VISITANTE,
+            nome: 'Visitante',
+            cor: null,
+            vitoriasConsecutivas: 0,
+          },
+        ]),
+      } as never,
+      {
+        find: jest.fn().mockResolvedValue([
+          {
+            timeId: CASA,
+            participanteId: 'fora-com-vaga',
+            ehGoleiro: false,
+          },
+        ]),
+      } as never,
+      { find: jest.fn().mockResolvedValue(participantes) } as never,
+      { find: jest.fn().mockResolvedValue([]) } as never,
+      { find: jest.fn().mockResolvedValue([]) } as never,
+    );
+
+    const resultado = await servico.montar(DONO, PELADA);
+
+    expect(resultado.timeCasa?.jogadores).toContainEqual(
+      expect.objectContaining({
+        participanteId: 'fora-com-vaga',
+        descansando: true,
+      }),
+    );
+    expect(resultado.descansando).toEqual([
+      expect.objectContaining({
+        participanteId: 'fora-sem-vaga',
+        descansando: true,
+      }),
+    ]);
   });
 });

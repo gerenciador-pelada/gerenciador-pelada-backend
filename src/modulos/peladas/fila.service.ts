@@ -198,6 +198,7 @@ export class FilaService {
         'PARTICIPANTE_FORA_DE_TIME',
         'Quem sai precisa estar em um time',
       );
+    const participanteSai = await this.carregarParticipante(peladaId, saiId);
 
     return this.fonteDados.transaction(async (gerenciador) => {
       // Quem entra assume a vaga exata de quem sai, inclusive a condicao de
@@ -208,8 +209,11 @@ export class FilaService {
 
       const nova = ordem.filter((id) => id !== participanteId);
       // Quem saiu do time volta na frente da fila: perdeu a vez sem ter
-      // pedido, entao e o proximo a entrar.
-      nova.unshift(saiId);
+      // pedido, entao e o proximo a entrar. A excecao e quem ja estava FORA:
+      // continua descansando ate o organizador mandar voltar.
+      if (participanteSai.status !== StatusParticipantePelada.DESCANSANDO) {
+        nova.unshift(saiId);
+      }
 
       await this.reescreverCom(gerenciador, peladaId, nova);
       return gerenciador.find(FilaJogadorEntity, {

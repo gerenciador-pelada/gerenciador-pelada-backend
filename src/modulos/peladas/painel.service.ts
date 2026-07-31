@@ -9,6 +9,7 @@ import { PartidaEntity } from '../../banco/entidades/partida.entity';
 import { PeladaEntity } from '../../banco/entidades/pelada.entity';
 import { TimeEntity } from '../../banco/entidades/time.entity';
 import { StatusPartida } from '../../comum/enums/status-partida.enum';
+import { StatusParticipantePelada } from '../../comum/enums/status-participante-pelada.enum';
 import { StatusPelada } from '../../comum/enums/status-pelada.enum';
 
 export interface JogadorPainel {
@@ -18,6 +19,7 @@ export interface JogadorPainel {
   ehGoleiro: boolean;
   ehGoleiroTemporario: boolean;
   ordemChegada: number | null;
+  descansando: boolean;
 }
 
 export interface TimePainel {
@@ -87,6 +89,12 @@ export class PainelService {
     const times = partidaDeReferencia
       ? await this.montarTimes(partidaDeReferencia, porParticipante)
       : { casa: null, visitante: null };
+    const idsNosTimes = new Set(
+      [
+        ...(times.casa?.jogadores ?? []),
+        ...(times.visitante?.jogadores ?? []),
+      ].map((jogador) => jogador.participanteId),
+    );
 
     const eventos = partidaDeReferencia
       ? await this.eventos.find({
@@ -123,6 +131,16 @@ export class PainelService {
       fila: registrosFila.map((f) =>
         this.mapearJogador(porParticipante.get(f.participanteId), false, false),
       ),
+      // Quem saiu por agora nao esta em campo nem na fila. Sem esta lista ele
+      // sumia da tela por inteiro, e o organizador nao tinha como traze-lo de
+      // volta — numa prancheta, o que nao aparece nao pode ser gerenciado.
+      descansando: participantes
+        .filter(
+          (p) =>
+            p.status === StatusParticipantePelada.DESCANSANDO &&
+            !idsNosTimes.has(p.id),
+        )
+        .map((p) => this.mapearJogador(p, false, false)),
       eventosRecentes: eventos.map((e) => ({
         id: e.id,
         tipo: e.tipo,
@@ -237,6 +255,8 @@ export class PainelService {
       ehGoleiro,
       ehGoleiroTemporario,
       ordemChegada: participante?.ordemChegada ?? null,
+      descansando:
+        participante?.status === StatusParticipantePelada.DESCANSANDO,
     };
   }
 }
