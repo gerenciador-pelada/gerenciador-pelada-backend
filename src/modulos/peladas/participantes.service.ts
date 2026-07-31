@@ -160,9 +160,10 @@ export class ParticipantesService {
   /**
    * Saida temporaria: o jogador para um pouco mas continua na pelada.
    *
-   * A vaga no time e guardada — JogadorTime segue ativo. E a diferenca em
-   * relacao a desistencia: quem descansa volta para o mesmo time, quem desiste
-   * perde a vaga para alguem da fila.
+   * Sai de campo — o time precisa mostrar quem esta jogando de verdade, e a
+   * vaga tem que aparecer para outro entrar. O que NAO muda e a fila: e
+   * exatamente ai que esta saida difere da desistencia. Quem descansa volta
+   * pela frente da fila; quem desiste sai dela e os de tras sobem.
    */
   async pausar(
     usuarioId: string,
@@ -198,7 +199,7 @@ export class ParticipantesService {
     return salvo;
   }
 
-  /** Volta de uma pausa, retomando a vaga que ficou guardada. */
+  /** Volta de uma pausa, entrando na frente da fila. */
   async retornar(
     usuarioId: string,
     peladaId: string,
