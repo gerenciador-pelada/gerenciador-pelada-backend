@@ -179,6 +179,9 @@ export class ParticipantesService {
         'Quem desistiu nao pode voltar a descansar',
       );
 
+    // Saida temporaria nao mexe em nada alem do status: nem no time, nem na
+    // fila. Quem so foi beber agua nao perde a vaga que estava ocupando nem a
+    // vez que conquistou esperando — e para isso que existe `retornar`.
     p.status = StatusParticipantePelada.DESCANSANDO;
     return this.participantes.save(p);
   }
@@ -242,7 +245,33 @@ export class ParticipantesService {
       { ativo: false, saiuEm: new Date() },
     );
 
+    // Sobe a lista: sem isto fica um buraco na numeracao, e quem esta atras
+    // continua vendo a posicao antiga — "sou o quinto" quando ja e o quarto.
+    // A saida e definitiva, entao a vez dele passa para quem vem depois.
+    await this.compactarFila(peladaId);
+
     return salvo;
+  }
+
+  /**
+   * Renumera a fila para 1..n sem buracos.
+   *
+   * Sobe em ordem crescente de proposito: compactando sempre para baixo, a
+   * posicao de destino ja foi liberada pelo passo anterior e o indice unico
+   * (pelada_id, posicao) nunca colide no meio do caminho.
+   */
+  private async compactarFila(peladaId: string): Promise<void> {
+    const restantes = await this.fila.find({
+      where: { peladaId, ativo: true },
+      order: { posicao: 'ASC' },
+    });
+
+    for (const [indice, registro] of restantes.entries()) {
+      const alvo = indice + 1;
+      if (registro.posicao !== alvo) {
+        await this.fila.update(registro.id, { posicao: alvo });
+      }
+    }
   }
 
   /**

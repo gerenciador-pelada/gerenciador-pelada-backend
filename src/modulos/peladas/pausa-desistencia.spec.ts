@@ -25,6 +25,8 @@ function criarServico(opcoes: {
   };
   const fila = {
     findOne: jest.fn().mockResolvedValue(null),
+    // A desistencia compacta a fila depois de tirar quem saiu.
+    find: jest.fn().mockResolvedValue([]),
     create: jest.fn().mockImplementation((d: unknown) => d),
     save: jest.fn().mockImplementation((d: unknown) => Promise.resolve(d)),
     update: jest.fn().mockResolvedValue({}),
@@ -135,6 +137,23 @@ describe('Pausa e desistência', () => {
 
       // Nada e apagado: gols e pontos ja marcados continuam valendo.
       expect(participantes.save).toHaveBeenCalled();
+    });
+
+    it('sobe a lista: quem fica assume as posicoes 1..n sem buraco', async () => {
+      const { servico, fila } = criarServico({ temTime: true });
+      // Quem saiu ocupava a posicao 2; restam a 1, a 3 e a 4.
+      fila.find.mockResolvedValueOnce([
+        { id: 'f1', posicao: 1 },
+        { id: 'f3', posicao: 3 },
+        { id: 'f4', posicao: 4 },
+      ]);
+
+      await servico.desistir(DONO, PELADA, PARTICIPANTE);
+
+      // A primeira ja esta certa e nao e tocada; as outras sobem uma.
+      expect(fila.update).toHaveBeenCalledWith('f3', { posicao: 2 });
+      expect(fila.update).toHaveBeenCalledWith('f4', { posicao: 3 });
+      expect(fila.update).not.toHaveBeenCalledWith('f1', { posicao: 1 });
     });
   });
 });
