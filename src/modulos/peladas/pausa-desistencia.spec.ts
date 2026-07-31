@@ -65,14 +65,19 @@ function criarServico(opcoes: {
 
 describe('Pausa e desistência', () => {
   describe('pausar', () => {
-    it('guarda a vaga no time', async () => {
+    it('sai de campo mas nao mexe na fila', async () => {
       const { servico, jogadoresTime, fila } = criarServico({ temTime: true });
 
       const p = await servico.pausar(DONO, PELADA, PARTICIPANTE);
 
       expect(p.status).toBe(StatusParticipantePelada.DESCANSANDO);
-      // A vaga fica guardada: nada e desativado no time nem na fila.
-      expect(jogadoresTime.update).not.toHaveBeenCalled();
+      // Sai do time: quem descansa nao esta jogando, e a vaga precisa
+      // aparecer para o organizador por outro no lugar.
+      expect(jogadoresTime.update).toHaveBeenCalledWith(
+        { participanteId: PARTICIPANTE, ativo: true },
+        expect.objectContaining({ ativo: false }),
+      );
+      // Mas a fila fica intacta — e o que separa pausa de desistencia.
       expect(fila.update).not.toHaveBeenCalled();
     });
 

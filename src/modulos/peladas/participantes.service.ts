@@ -179,11 +179,23 @@ export class ParticipantesService {
         'Quem desistiu nao pode voltar a descansar',
       );
 
-    // Saida temporaria nao mexe em nada alem do status: nem no time, nem na
-    // fila. Quem so foi beber agua nao perde a vaga que estava ocupando nem a
-    // vez que conquistou esperando — e para isso que existe `retornar`.
     p.status = StatusParticipantePelada.DESCANSANDO;
-    return this.participantes.save(p);
+    const salvo = await this.participantes.save(p);
+
+    // Sai de campo de verdade: quem esta descansando nao esta jogando, e o
+    // time precisa mostrar isso para o organizador poder por outro no lugar.
+    // Antes o elenco continuava listando quem tinha saido, e a vaga nao
+    // aparecia em lugar nenhum.
+    //
+    // A FILA continua intacta de proposito — e o que separa esta saida da
+    // desistencia. Quem so foi beber agua nao vai para o fim da fila nem
+    // perde a vez que conquistou esperando; `retornar` traz de volta.
+    await this.jogadoresTime.update(
+      { participanteId: id, ativo: true },
+      { ativo: false, saiuEm: new Date() },
+    );
+
+    return salvo;
   }
 
   /** Volta de uma pausa, retomando a vaga que ficou guardada. */
@@ -209,10 +221,40 @@ export class ParticipantesService {
       ? StatusParticipantePelada.JOGANDO
       : StatusParticipantePelada.PRESENTE;
 
-    // Quem voltou e nao tem time entra no fim da fila; quem tem, retoma a vaga.
     const salvo = await this.participantes.save(p);
+
+    // Quem tem time retoma a vaga direto. Quem nao tem volta na FRENTE da
+    // fila, e nao no fim: ele saiu de campo por uma pausa, nao por ter
+    // perdido a vez — mandar para o fim cobraria por ter ido beber agua.
+    // Se ja estiver na fila, `enfileirar` nao duplica.
     if (!emTime && pelada.status === StatusPelada.EM_ANDAMENTO) {
-      await this.enfileirar(peladaId, salvo);
+      const jaNaFila = await this.fila.findOne({
+        where: { peladaId, participanteId: id, ativo: true },
+      });
+      if (!jaNaFila) {
+        // Abre espaco na posicao 1 empurrando todo mundo um degrau. Em ordem
+        // DECRESCENTE de proposito: o ultimo sobe primeiro, entao a posicao
+        // de destino sempre esta livre e o indice unico (pelada_id, posicao)
+        // nunca colide no meio do caminho.
+        const atuais = await this.fila.find({
+          where: { peladaId, ativo: true },
+          order: { posicao: 'DESC' },
+        });
+        for (const registro of atuais) {
+          await this.fila.update(registro.id, {
+            posicao: registro.posicao + 1,
+          });
+        }
+        await this.fila.save(
+          this.fila.create({
+            peladaId,
+            participanteId: id,
+            posicao: 1,
+            ativo: true,
+            saiuEm: null,
+          }),
+        );
+      }
     }
     return salvo;
   }
