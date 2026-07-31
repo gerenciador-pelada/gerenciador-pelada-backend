@@ -210,9 +210,11 @@ export class FilaService {
     const participanteSai = await this.carregarParticipante(peladaId, saiId);
 
     return this.fonteDados.transaction(async (gerenciador) => {
-      const coberturaTemporaria =
+      const titularDescansando =
         participanteSai.status === StatusParticipantePelada.DESCANSANDO;
-      if (coberturaTemporaria) {
+      const coberturaTemporaria =
+        titularDescansando || Boolean(vaga.substituiParticipanteId);
+      if (titularDescansando) {
         // A vaga continua pertencendo a quem esta FORA. O novo membro e uma
         // cobertura temporaria, que pode ser devolvida sem inverter os dois
         // jogadores quando o titular retornar.

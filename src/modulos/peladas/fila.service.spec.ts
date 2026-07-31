@@ -26,6 +26,7 @@ function criarServico(
       .fn()
       .mockImplementation((_entidade: unknown, dados: unknown) => dados),
     delete: jest.fn().mockResolvedValue({}),
+    update: jest.fn().mockResolvedValue({}),
     find: jest.fn().mockResolvedValue([]),
     save: jest
       .fn()
@@ -272,5 +273,45 @@ describe('FilaService', () => {
     await expect(
       servico.entrarNoLugarDe(DONO, PELADA, 'entra', 'fora'),
     ).rejects.toMatchObject({ codigo: 'PARTICIPANTE_EM_TIME' });
+  });
+
+  it('troca quem cobre uma vaga sem alterar as posicoes da fila', async () => {
+    const { servico, gerenciador } = criarServico(
+      [
+        { participanteId: 'sai', ativo: true, posicao: 1 },
+        { participanteId: 'entra', ativo: true, posicao: 2 },
+      ],
+      {
+        id: 'sai',
+        peladaId: PELADA,
+        status: StatusParticipantePelada.PRESENTE,
+      },
+      {
+        sai: {
+          id: 'cobertura-atual',
+          timeId: 'time-a',
+          participanteId: 'sai',
+          substituiParticipanteId: 'titular-fora',
+          ativo: true,
+        },
+      },
+    );
+
+    await servico.entrarNoLugarDe(DONO, PELADA, 'entra', 'sai');
+
+    expect(gerenciador.update).toHaveBeenCalledWith(
+      JogadorTimeEntity,
+      'cobertura-atual',
+      { participanteId: 'entra' },
+    );
+    const registrosSalvos = gerenciador.save.mock.calls.flatMap(([registro]) =>
+      Array.isArray(registro) ? registro : [registro],
+    ) as Array<{ participanteId?: string; posicao?: number }>;
+    expect(registrosSalvos).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ participanteId: 'sai', posicao: 1 }),
+        expect.objectContaining({ participanteId: 'entra', posicao: 2 }),
+      ]),
+    );
   });
 });
