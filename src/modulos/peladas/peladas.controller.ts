@@ -42,6 +42,8 @@ import { FilaService } from './fila.service';
 import { RankingPublicoService } from './ranking-publico.service';
 import { FinanceiroService } from './financeiro.service';
 import { EstatisticasGrupoService } from './estatisticas-grupo.service';
+import { LancamentoManualService } from './lancamento-manual.service';
+import { LancamentoManualDto } from './dto/lancamento-manual.dto';
 import {
   DefinirValorCampoDto,
   MarcarPagamentoDto,
@@ -74,6 +76,7 @@ export class PeladasController {
     private readonly rankingPublico_: RankingPublicoService,
     private readonly financeiro: FinanceiroService,
     private readonly estatisticas: EstatisticasGrupoService,
+    private readonly lancamento: LancamentoManualService,
   ) {}
 
   @Get(':id/painel')
@@ -227,6 +230,18 @@ export class PeladasController {
     @Param('grupoId', ParseUUIDPipe) grupoId: string,
   ) {
     return this.estatisticas.doGrupo(u.id, grupoId);
+  }
+
+  @Post(':id/lancamento')
+  @ApiOperation({
+    summary: 'Lanca o consolidado de uma pelada anterior ao app',
+  })
+  lancarManual(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: LancamentoManualDto,
+  ) {
+    return this.lancamento.lancar(u.id, id, dto.jogadores);
   }
 
   @Get('/rankings') listarRankings(
