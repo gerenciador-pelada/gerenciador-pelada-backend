@@ -170,6 +170,16 @@ export class PeladasController {
     return this.partidas.substituir(u.id, id, dto.saiId, dto.entraId);
   }
 
+  @Delete('/partidas/:partidaId/eventos/:eventoId')
+  @ApiOperation({ summary: 'Apaga um evento registrado por engano' })
+  removerEvento(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('partidaId', ParseUUIDPipe) partidaId: string,
+    @Param('eventoId', ParseUUIDPipe) eventoId: string,
+  ) {
+    return this.eventos.remover(u.id, partidaId, eventoId);
+  }
+
   @Post('/partidas/:partidaId/eventos') registrarEvento(
     @UsuarioAtual() u: UsuarioRequisicao,
     @Param('partidaId', ParseUUIDPipe) id: string,

@@ -9,6 +9,7 @@ import { StatusPartida } from '../../comum/enums/status-partida.enum';
 import { TipoEventoPartida } from '../../comum/enums/tipo-evento-partida.enum';
 import { ErroRegraPelada } from '../../dominio/erros/erro-regra-pelada';
 import { ACAO_REGISTRO_EVENTO, HistoricoService } from './historico.service';
+import { PartidasService } from './partidas.service';
 @Injectable()
 export class EventosPartidaService {
   constructor(
@@ -19,7 +20,28 @@ export class EventosPartidaService {
     @InjectRepository(EventoPartidaEntity)
     private eventos: Repository<EventoPartidaEntity>,
     private readonly historico: HistoricoService,
+    private readonly partidasService: PartidasService,
   ) {}
+
+  /**
+   * Carrega a partida garantindo a posse.
+   *
+   * A posse entra no WHERE: partida inexistente e partida de outro organizador
+   * respondem o mesmo 404, sem revelar quais ids existem.
+   */
+  private async buscarPartida(
+    usuarioId: string,
+    partidaId: string,
+  ): Promise<PartidaEntity> {
+    const partida = await this.partidas
+      .createQueryBuilder('partida')
+      .innerJoin(PeladaEntity, 'pelada', 'pelada.id = partida.peladaId')
+      .where('partida.id = :partidaId', { partidaId })
+      .andWhere('pelada.organizadorId = :usuarioId', { usuarioId })
+      .getOne();
+    if (!partida) throw new NotFoundException('Partida nao encontrada');
+    return partida;
+  }
   async registrar(
     usuarioId: string,
     partidaId: string,
@@ -31,20 +53,16 @@ export class EventosPartidaService {
       minuto?: number;
     },
   ) {
-    // A posse entra no WHERE: partida inexistente e partida de outro
-    // organizador respondem o mesmo 404, sem revelar quais ids existem.
-    const partida = await this.partidas
-      .createQueryBuilder('partida')
-      .innerJoin(PeladaEntity, 'pelada', 'pelada.id = partida.peladaId')
-      .where('partida.id = :partidaId', { partidaId })
-      .andWhere('pelada.organizadorId = :usuarioId', { usuarioId })
-      .getOne();
-    if (!partida) throw new NotFoundException('Partida nao encontrada');
+    const partida = await this.buscarPartida(usuarioId, partidaId);
 
-    if (partida.status !== StatusPartida.EM_ANDAMENTO) {
+    // Encerrada tambem aceita: e o caso de corrigir um gol esquecido no calor
+    // do jogo. A pontuacao daquela partida e refeita ao final deste metodo,
+    // senao o ranking mostraria a contagem nova com os pontos velhos.
+    const corrigindo = partida.status === StatusPartida.FINALIZADA;
+    if (partida.status !== StatusPartida.EM_ANDAMENTO && !corrigindo) {
       throw new ErroRegraPelada(
         'PARTIDA_NAO_EM_ANDAMENTO',
-        'Eventos so podem ser registrados durante a partida',
+        'Eventos so podem ser registrados durante a partida ou apos ela terminar',
       );
     }
 
@@ -141,6 +159,52 @@ export class EventosPartidaService {
       },
     );
 
+    // Corrigir uma partida encerrada muda o placar e, com ele, quem venceu.
+    // Sem refazer a pontuacao o ranking somaria a contagem nova aos pontos
+    // antigos — dois numeros contando historias diferentes.
+    if (corrigindo) {
+      await this.partidasService.recalcularPontuacao(usuarioId, partidaId);
+    }
+
     return e;
+  }
+
+  /**
+   * Apaga um evento registrado por engano.
+   *
+   * Vale durante e depois da partida: gol anotado no jogador errado aparece
+   * tanto no calor do jogo quanto na conferencia do dia seguinte. Gol e gol
+   * contra descontam do placar, senao o resultado passaria a nao corresponder
+   * aos eventos que o sustentam.
+   */
+  async remover(
+    usuarioId: string,
+    partidaId: string,
+    eventoId: string,
+  ): Promise<void> {
+    const partida = await this.buscarPartida(usuarioId, partidaId);
+
+    const evento = await this.eventos.findOne({
+      where: { id: eventoId, partidaId },
+    });
+    if (!evento) throw new NotFoundException('Evento nao encontrado');
+
+    const ehGol = evento.tipo === TipoEventoPartida.GOL;
+    const ehGolContra = evento.tipo === TipoEventoPartida.GOL_CONTRA;
+
+    await this.eventos.delete(eventoId);
+
+    if (ehGol || ehGolContra) {
+      if (evento.timeId === partida.timeCasaId) {
+        partida.golsCasa = Math.max(0, partida.golsCasa - 1);
+      } else {
+        partida.golsVisitante = Math.max(0, partida.golsVisitante - 1);
+      }
+      await this.partidas.save(partida);
+    }
+
+    if (partida.status === StatusPartida.FINALIZADA) {
+      await this.partidasService.recalcularPontuacao(usuarioId, partidaId);
+    }
   }
 }

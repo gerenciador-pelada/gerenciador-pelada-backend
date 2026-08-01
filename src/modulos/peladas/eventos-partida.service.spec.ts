@@ -77,11 +77,16 @@ function criarCenario({
   const historico = {
     registrar: jest.fn().mockResolvedValue({}),
   };
+  // Corrigir partida encerrada refaz a pontuacao; aqui so precisa existir.
+  const partidasService = {
+    recalcularPontuacao: jest.fn().mockResolvedValue(undefined),
+  };
   const servico = new EventosPartidaService(
     repositorioPartidas as never,
     repositorioParticipacoes as never,
     repositorioEventos as never,
     historico as never,
+    partidasService as never,
   );
 
   return { servico, partida, eventos };

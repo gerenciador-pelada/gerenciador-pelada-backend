@@ -540,6 +540,53 @@ export class PartidasService {
   }
 
   /** Grava quanto cada participante pontuou nesta partida, detalhado por origem. */
+  /**
+   * Refaz a pontuacao de uma partida ja encerrada.
+   *
+   * A pontuacao e congelada na finalizacao — e proposital, porque as regras da
+   * pelada podem mudar depois e o passado nao deve se reescrever sozinho. Mas
+   * quando um gol foi esquecido no calor do jogo, o que esta congelado esta
+   * simplesmente errado, e o organizador precisa poder consertar.
+   *
+   * Apaga e recalcula em vez de somar a diferenca: somar exigiria saber o que
+   * cada evento contribuiu, e um erro de sinal ali ficaria escondido para
+   * sempre. Recalcular do zero sempre chega no valor certo.
+   */
+  async recalcularPontuacao(
+    usuarioId: string,
+    partidaId: string,
+  ): Promise<void> {
+    const partida = await this.buscar(usuarioId, partidaId);
+    if (partida.status !== StatusPartida.FINALIZADA) return;
+
+    await this.fonteDados.transaction(async (gerenciador) => {
+      const pelada = await gerenciador.findOne(PeladaEntity, {
+        where: { id: partida.peladaId },
+        relations: ['configuracao'],
+      });
+      if (!pelada) throw new NotFoundException('Pelada nao encontrada');
+
+      const empatou = partida.golsCasa === partida.golsVisitante;
+      const timeVencedorId = empatou
+        ? partida.vencedorDecisao === 'CASA'
+          ? partida.timeCasaId
+          : partida.vencedorDecisao === 'VISITANTE'
+            ? partida.timeVisitanteId
+            : null
+        : partida.golsCasa > partida.golsVisitante
+          ? partida.timeCasaId
+          : partida.timeVisitanteId;
+
+      await gerenciador.delete(PontuacaoJogadorEntity, { partidaId });
+      await this.pontuar(
+        gerenciador,
+        partida,
+        pelada.configuracao,
+        timeVencedorId,
+      );
+    });
+  }
+
   private async pontuar(
     gerenciador: EntityManager,
     partida: PartidaEntity,
