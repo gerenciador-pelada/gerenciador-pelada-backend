@@ -5,6 +5,7 @@ import { EventoPartidaEntity } from '../../banco/entidades/evento-partida.entity
 import { FilaJogadorEntity } from '../../banco/entidades/fila-jogador.entity';
 import { JogadorTimeEntity } from '../../banco/entidades/jogador-time.entity';
 import { ParticipantePeladaEntity } from '../../banco/entidades/participante-pelada.entity';
+import { ParticipacaoPartidaEntity } from '../../banco/entidades/participacao-partida.entity';
 import { PartidaEntity } from '../../banco/entidades/partida.entity';
 import { PeladaEntity } from '../../banco/entidades/pelada.entity';
 import { TimeEntity } from '../../banco/entidades/time.entity';
@@ -22,6 +23,12 @@ export interface JogadorPainel {
   descansando: boolean;
   substituiParticipanteId: string | null;
   substituiNome: string | null;
+  /**
+   * Quantas partidas desta edicao a pessoa ja jogou. E o criterio da rotacao
+   * quando a fila nao fecha o time — `ordemChegada` so diz a que horas ela
+   * apareceu na pelada.
+   */
+  partidasJogadas: number;
 }
 
 export interface TimePainel {
@@ -56,6 +63,8 @@ export class PainelService {
     private readonly fila: Repository<FilaJogadorEntity>,
     @InjectRepository(EventoPartidaEntity)
     private readonly eventos: Repository<EventoPartidaEntity>,
+    @InjectRepository(ParticipacaoPartidaEntity)
+    private readonly participacoes: Repository<ParticipacaoPartidaEntity>,
   ) {}
 
   async montar(usuarioId: string, peladaId: string) {
@@ -88,8 +97,17 @@ export class PainelService {
         : null;
     const partidaDeReferencia = partidaAtual ?? ultimaPartida;
 
+    // Quantas partidas cada um ja jogou: e o criterio de quem fica quando a
+    // fila nao fecha o time, e a tela de encerrar precisa dele para prever
+    // corretamente quem sai.
+    const jogadasPorParticipante = await this.contarPartidasJogadas(peladaId);
+
     const times = partidaDeReferencia
-      ? await this.montarTimes(partidaDeReferencia, porParticipante)
+      ? await this.montarTimes(
+          partidaDeReferencia,
+          porParticipante,
+          jogadasPorParticipante,
+        )
       : { casa: null, visitante: null };
     const idsNosTimes = new Set(
       [
@@ -185,9 +203,28 @@ export class PainelService {
     };
   }
 
+  private async contarPartidasJogadas(
+    peladaId: string,
+  ): Promise<Map<string, number>> {
+    const linhas = await this.participacoes
+      .createQueryBuilder('participacao')
+      .innerJoin(
+        PartidaEntity,
+        'partida',
+        'partida.id = participacao.partida_id',
+      )
+      .where('partida.pelada_id = :peladaId', { peladaId })
+      .select('participacao.participante_id', 'participanteId')
+      .addSelect('COUNT(*)', 'total')
+      .groupBy('participacao.participante_id')
+      .getRawMany<{ participanteId: string; total: string }>();
+    return new Map(linhas.map((l) => [l.participanteId, Number(l.total)]));
+  }
+
   private async montarTimes(
     partida: PartidaEntity,
     porParticipante: Map<string, ParticipantePeladaEntity>,
+    jogadasPorParticipante: Map<string, number>,
   ): Promise<{ casa: TimePainel | null; visitante: TimePainel | null }> {
     const times = await this.times.find({
       where: [{ id: partida.timeCasaId }, { id: partida.timeVisitanteId }],
@@ -213,6 +250,7 @@ export class PainelService {
             e.substituiParticipanteId
               ? porParticipante.get(e.substituiParticipanteId)
               : undefined,
+            jogadasPorParticipante.get(e.participanteId) ?? 0,
           ),
         );
       const goleiroTemporarioId =
@@ -255,6 +293,7 @@ export class PainelService {
     ehGoleiroTemporario: boolean,
     substituiParticipanteId: string | null = null,
     substituido?: ParticipantePeladaEntity,
+    partidasJogadas = 0,
   ): JogadorPainel {
     return {
       participanteId: participante?.id ?? '',
@@ -267,6 +306,7 @@ export class PainelService {
         participante?.status === StatusParticipantePelada.DESCANSANDO,
       substituiParticipanteId,
       substituiNome: substituido?.jogador?.nome ?? null,
+      partidasJogadas,
     };
   }
 }

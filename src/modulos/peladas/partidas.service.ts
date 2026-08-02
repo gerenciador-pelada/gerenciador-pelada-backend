@@ -702,17 +702,27 @@ export class PartidasService {
     opcoes: FinalizarOpcoes,
   ): Promise<PartidaEntity | null> {
     const goleirosPorTime = new Map<string, string[]>();
+    const jogadasPorParticipante = await this.contarPartidasJogadas(
+      gerenciador,
+      partida.peladaId,
+    );
     const casa = await this.montarTimeRotacao(
       gerenciador,
       partida.timeCasaId,
       goleirosPorTime,
+      jogadasPorParticipante,
     );
     const visitante = await this.montarTimeRotacao(
       gerenciador,
       partida.timeVisitanteId,
       goleirosPorTime,
+      jogadasPorParticipante,
     );
-    const fila = await this.montarFila(gerenciador, partida.peladaId);
+    const fila = await this.montarFila(
+      gerenciador,
+      partida.peladaId,
+      jogadasPorParticipante,
+    );
 
     const saem: TimeRotacao[] = empatou
       ? MotorPelada.empate(
@@ -757,9 +767,20 @@ export class PartidasService {
 
     const daFila = fila.slice(0, vagas);
     const idsNaFila = new Set(fila.map((jogador) => jogador.id));
+    // Quando a fila nao fecha o time, quem completa e quem jogou menos — nao
+    // quem chegou mais cedo na pelada.
+    //
+    // Ordenar por `ordemChegada` aqui punia justamente quem acabou de entrar:
+    // vinha da fila para preencher uma vaga, o time perdia em seguida, e ele
+    // saia na mesma hora, enquanto alguem que estava em campo ha quatro
+    // partidas ficava. Quem acabou de entrar e o ultimo a sair.
     const complemento = jogadoresQueSaem
       .filter((jogador) => !idsNaFila.has(jogador.id))
-      .sort((a, b) => a.ordemChegada - b.ordemChegada)
+      .sort(
+        (a, b) =>
+          a.partidasJogadas - b.partidasJogadas ||
+          a.ordemChegada - b.ordemChegada,
+      )
       .slice(0, Math.max(0, vagas - daFila.length));
     const entram = [...daFila, ...complemento];
 
@@ -926,6 +947,7 @@ export class PartidasService {
     gerenciador: EntityManager,
     timeId: string,
     goleirosPorTime: Map<string, string[]>,
+    jogadasPorParticipante: Map<string, number>,
   ): Promise<TimeRotacao> {
     const time = await gerenciador.findOneByOrFail(TimeEntity, { id: timeId });
     const elenco = await gerenciador.find(JogadorTimeEntity, {
@@ -955,13 +977,41 @@ export class PartidasService {
         .map((p) => ({
           id: p.id,
           ordemChegada: p.ordemChegada ?? Number.MAX_SAFE_INTEGER,
+          partidasJogadas: jogadasPorParticipante.get(p.id) ?? 0,
         })),
     };
+  }
+
+  /**
+   * Quantas partidas desta edicao cada participante ja jogou.
+   *
+   * E o criterio de quem fica quando a fila nao fecha o time. Uma consulta
+   * agregada, e nao uma por jogador: a rotacao acontece a cada partida.
+   */
+  private async contarPartidasJogadas(
+    gerenciador: EntityManager,
+    peladaId: string,
+  ): Promise<Map<string, number>> {
+    const linhas = await gerenciador
+      .createQueryBuilder(ParticipacaoPartidaEntity, 'participacao')
+      .innerJoin(
+        PartidaEntity,
+        'partida',
+        'partida.id = participacao.partida_id',
+      )
+      .where('partida.pelada_id = :peladaId', { peladaId })
+      .select('participacao.participante_id', 'participanteId')
+      .addSelect('COUNT(*)', 'total')
+      .groupBy('participacao.participante_id')
+      .getRawMany<{ participanteId: string; total: string }>();
+
+    return new Map(linhas.map((l) => [l.participanteId, Number(l.total)]));
   }
 
   private async montarFila(
     gerenciador: EntityManager,
     peladaId: string,
+    jogadasPorParticipante: Map<string, number>,
   ): Promise<JogadorRotacao[]> {
     const fila = await gerenciador.find(FilaJogadorEntity, {
       where: { peladaId, ativo: true },
@@ -982,6 +1032,7 @@ export class PartidasService {
     return fila.map((f) => ({
       id: f.participanteId,
       ordemChegada: ordemPorId.get(f.participanteId) ?? Number.MAX_SAFE_INTEGER,
+      partidasJogadas: jogadasPorParticipante.get(f.participanteId) ?? 0,
     }));
   }
 

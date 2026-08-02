@@ -4,6 +4,18 @@ import { ErroRegraPelada } from '../erros/erro-regra-pelada';
 export interface JogadorRotacao {
   id: string;
   ordemChegada: number;
+  /**
+   * Quantas partidas desta edicao a pessoa ja jogou.
+   *
+   * E o que diz ha quanto tempo ela esta em campo — diferente de
+   * `ordemChegada`, que so diz a que horas ela apareceu na pelada. Quem veio
+   * da fila agora jogou menos, mesmo tendo chegado cedo.
+   *
+   * Nao da para usar a data de entrada no time: o time perdedor e dissolvido
+   * e um novo e criado a cada rodada, entao quem fica e quem chega recebem a
+   * mesma data.
+   */
+  partidasJogadas: number;
 }
 export interface TimeRotacao {
   id: string;
@@ -27,8 +39,15 @@ export class MotorPelada {
   ): ResultadoRotacao {
     const proximo = fila.slice(0, tamanho);
     const faltam = tamanho - proximo.length;
+    // Completa com quem jogou menos. Por `ordemChegada` quem acabou de entrar
+    // saia junto com o time, enquanto alguem em campo ha varias partidas
+    // ficava — o contrario do que a pelada entende por vez.
     const complemento = [...perdedor.jogadores]
-      .sort((a, b) => a.ordemChegada - b.ordemChegada)
+      .sort(
+        (a, b) =>
+          a.partidasJogadas - b.partidasJogadas ||
+          a.ordemChegada - b.ordemChegada,
+      )
       .slice(0, faltam);
     return {
       permanece: vencedor,

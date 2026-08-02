@@ -166,6 +166,17 @@ function criarAmbiente(
       }
       return Promise.resolve(dados);
     }),
+    // A contagem de partidas jogadas roda por consulta agregada; neste
+    // ambiente ninguem jogou nada ainda, entao o desempate cai em ordem de
+    // chegada, que e o que estes testes exercitam.
+    createQueryBuilder: jest.fn().mockReturnValue({
+      innerJoin: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      groupBy: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([]),
+    }),
   };
 
   const construtor = {
