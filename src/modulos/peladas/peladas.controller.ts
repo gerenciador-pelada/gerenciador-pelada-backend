@@ -29,6 +29,7 @@ import { AlterarStatusParticipanteDto } from './dto/alterar-status-participante.
 import { ReordenarChegadaDto } from './dto/reordenar-chegada.dto';
 import { SorteiosService } from './sorteios.service';
 import { PartidasService } from './partidas.service';
+import { PartidasDaPeladaService } from './partidas-da-pelada.service';
 import { EventosPartidaService } from './eventos-partida.service';
 import { RankingsService } from './rankings.service';
 import { HistoricoService } from './historico.service';
@@ -68,6 +69,7 @@ export class PeladasController {
     private readonly participantes: ParticipantesService,
     private readonly sorteios: SorteiosService,
     private readonly partidas: PartidasService,
+    private readonly partidasDaPelada: PartidasDaPeladaService,
     private readonly eventos: EventosPartidaService,
     private readonly rankings: RankingsService,
     private readonly historico: HistoricoService,
@@ -257,6 +259,17 @@ export class PeladasController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.historico.listar(u.id, id);
+  }
+
+  @Get(':id/partidas')
+  @ApiOperation({
+    summary: 'Partidas da edicao com gols, assistencias e destaques',
+  })
+  listarPartidas(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.partidasDaPelada.listar(u.id, id);
   }
   @Post(':id/desfazer') desfazer(
     @UsuarioAtual() u: UsuarioRequisicao,

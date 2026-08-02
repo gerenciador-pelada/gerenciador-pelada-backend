@@ -17,6 +17,7 @@ import { PartidaEntity } from '../../banco/entidades/partida.entity';
 import { ParticipacaoPartidaEntity } from '../../banco/entidades/participacao-partida.entity';
 import { EventoPartidaEntity } from '../../banco/entidades/evento-partida.entity';
 import { PartidasService } from './partidas.service';
+import { PartidasDaPeladaService } from './partidas-da-pelada.service';
 import { EventosPartidaService } from './eventos-partida.service';
 import { PontuacaoJogadorEntity } from '../../banco/entidades/pontuacao-jogador.entity';
 import { RankingsService } from './rankings.service';
@@ -60,6 +61,7 @@ import { LancamentoManualService } from './lancamento-manual.service';
     ParticipantesService,
     SorteiosService,
     PartidasService,
+    PartidasDaPeladaService,
     EventosPartidaService,
     RankingsService,
     HistoricoService,

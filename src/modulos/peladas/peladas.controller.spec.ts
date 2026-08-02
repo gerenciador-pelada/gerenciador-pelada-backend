@@ -23,6 +23,7 @@ describe('PeladasController', () => {
   const participantes = {};
   const sorteios = {};
   const partidas = { finalizarPelada: jest.fn() };
+  const partidasDaPelada = { listar: jest.fn() };
   const eventos = {};
   const rankings = {};
   const historico = {};
@@ -38,6 +39,7 @@ describe('PeladasController', () => {
     participantes as never,
     sorteios as never,
     partidas as never,
+    partidasDaPelada as never,
     eventos as never,
     rankings as never,
     historico as never,
