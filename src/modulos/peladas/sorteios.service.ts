@@ -48,13 +48,17 @@ export class SorteiosService {
     // transicao de status separada antes criava um passo invisivel: a pelada
     // nascia ABERTA_INSCRICOES e o sorteio recusava, por mais gente presente
     // que houvesse. A maquina de status continua governando a transicao.
-    if (pelada.status === StatusPelada.ABERTA_INSCRICOES) {
+    //
+    // A gravacao do novo status vai junto com o sorteio, dentro da transacao.
+    // Gravar antes deixava a pelada EM_ANDAMENTO sem nenhuma partida quando o
+    // sorteio falhava por falta de gente — e nesse estado o proprio sorteio
+    // inicial ficava inalcancavel, travando a edicao para sempre.
+    const vaiComecarAgora = pelada.status === StatusPelada.ABERTA_INSCRICOES;
+    if (vaiComecarAgora) {
       MaquinaStatusPelada.garantirTransicao(
         pelada.status,
         StatusPelada.EM_ANDAMENTO,
       );
-      pelada.status = StatusPelada.EM_ANDAMENTO;
-      await this.peladas.save(pelada);
     } else if (pelada.status !== StatusPelada.EM_ANDAMENTO) {
       throw new ErroRegraPelada(
         'SORTEIO_STATUS_INVALIDO',
@@ -88,6 +92,12 @@ export class SorteiosService {
           'SORTEIO_PARTIDA_JA_INICIADA',
           'Nao e possivel sortear: a pelada ja tem partida iniciada',
         );
+      }
+
+      if (vaiComecarAgora) {
+        await gerenciador.update(PeladaEntity, peladaId, {
+          status: StatusPelada.EM_ANDAMENTO,
+        });
       }
 
       await gerenciador.delete(PartidaEntity, { peladaId });
