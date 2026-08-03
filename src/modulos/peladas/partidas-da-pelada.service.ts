@@ -90,6 +90,11 @@ export class PartidasDaPeladaService {
         id: partida.id,
         numero: partida.numero,
         status: partida.status,
+        // Lancamento manual tem o mesmo time dos dois lados. Um sorteio de
+        // verdade sempre cria dois, entao a forma basta para reconhece-lo — e
+        // a tela precisa saber, porque corrigir evento a evento nao serve
+        // para ele: os pontos foram digitados e seriam recalculados por cima.
+        ehLancamentoManual: partida.timeCasaId === partida.timeVisitanteId,
         golsCasa: partida.golsCasa,
         golsVisitante: partida.golsVisitante,
         iniciadaEm: partida.iniciadaEm?.toISOString() ?? null,

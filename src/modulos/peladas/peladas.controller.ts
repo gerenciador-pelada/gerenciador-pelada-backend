@@ -246,6 +246,17 @@ export class PeladasController {
     return this.lancamento.lancar(u.id, id, dto.jogadores);
   }
 
+  @Delete(':id/lancamento')
+  @ApiOperation({
+    summary: 'Apaga o lancamento manual para que possa ser refeito',
+  })
+  desfazerLancamento(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.lancamento.desfazer(u.id, id);
+  }
+
   @Get('/rankings') listarRankings(
     @UsuarioAtual() u: UsuarioRequisicao,
     @Query('peladaId') peladaId?: string,

@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, IsNull, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, IsNull, Repository } from 'typeorm';
 import { EventoPartidaEntity } from '../../banco/entidades/evento-partida.entity';
 import { JogadorEntity } from '../../banco/entidades/jogador.entity';
 import { ParticipacaoPartidaEntity } from '../../banco/entidades/participacao-partida.entity';
@@ -204,6 +204,74 @@ export class LancamentoManualService {
       });
 
       return { participantes: linhas.length, partidaId: partida.id };
+    });
+  }
+
+  /**
+   * Apaga um lancamento manual inteiro, devolvendo a edicao ao estado de antes.
+   *
+   * E o unico jeito de corrigir um lancamento errado. Editar no lugar nao
+   * serve: os pontos entram somados a mao, e qualquer correcao de evento
+   * dispara `recalcularPontuacao`, que refaz a pontuacao pelas regras da
+   * pelada e apaga o total digitado. Melhor apagar tudo e lancar de novo com
+   * os numeros certos do que deixar duas fontes se contradizerem.
+   */
+  async desfazer(
+    usuarioId: string,
+    peladaId: string,
+  ): Promise<{ partidaId: string; participantes: number }> {
+    const pelada = await this.peladas.findOne({
+      where: { id: peladaId, organizadorId: usuarioId, deletadoEm: IsNull() },
+    });
+    if (!pelada) throw new NotFoundException('Pelada nao encontrada');
+
+    return this.fonteDados.transaction(async (gerenciador) => {
+      const partidas = await gerenciador.find(PartidaEntity, {
+        where: { peladaId },
+      });
+
+      // A assinatura do lancamento manual: uma unica partida com o mesmo time
+      // dos dois lados. Um sorteio de verdade sempre cria dois times, entao
+      // esta checagem nunca alcanca uma pelada jogada — e e por isso que ela
+      // olha a forma, e nao o nome do time, que o organizador pode renomear.
+      const manual = partidas.find((p) => p.timeCasaId === p.timeVisitanteId);
+      if (partidas.length !== 1 || !manual)
+        throw new ErroRegraPelada(
+          'SEM_LANCAMENTO_MANUAL',
+          'Esta pelada nao tem um lancamento manual para desfazer',
+        );
+
+      const participacoes = await gerenciador.find(ParticipacaoPartidaEntity, {
+        where: { partidaId: manual.id },
+      });
+      const idsParticipantes = participacoes.map((p) => p.participanteId);
+
+      // Ordem ditada pelas chaves estrangeiras: o evento aponta para o
+      // participante com RESTRICT, entao ele sai primeiro.
+      await gerenciador.delete(PontuacaoJogadorEntity, {
+        partidaId: manual.id,
+      });
+      await gerenciador.delete(EventoPartidaEntity, { partidaId: manual.id });
+      await gerenciador.delete(ParticipacaoPartidaEntity, {
+        partidaId: manual.id,
+      });
+      await gerenciador.delete(PartidaEntity, { id: manual.id });
+      await gerenciador.delete(TimeEntity, { id: manual.timeCasaId });
+      // So quem o lancamento criou. Se o organizador tinha adicionado alguem
+      // antes, essa pessoa nao participou da partida sintetica e fica.
+      if (idsParticipantes.length)
+        await gerenciador.delete(ParticipantePeladaEntity, {
+          id: In(idsParticipantes),
+        });
+
+      await gerenciador.update(PeladaEntity, peladaId, {
+        status: StatusPelada.ABERTA_INSCRICOES,
+      });
+
+      return {
+        partidaId: manual.id,
+        participantes: idsParticipantes.length,
+      };
     });
   }
 
