@@ -6,6 +6,7 @@ import { AdicionarAcertoFinanceiro1785520000000 } from './migracoes/178552000000
 import { AumentarMaximoJogadoresPadrao1785530000000 } from './migracoes/1785530000000-AumentarMaximoJogadoresPadrao';
 import { AdicionarSubstituicaoTemporaria1785530000000 } from './migracoes/1785530000000-AdicionarSubstituicaoTemporaria';
 import { RepararFilaSubstitutosTemporarios1785540000000 } from './migracoes/1785540000000-RepararFilaSubstitutosTemporarios';
+import { CriarAssinaturas1785600000000 } from './migracoes/1785600000000-CriarAssinaturas';
 import { AdicionarVencedorDecisaoPartida1785425000000 } from './migracoes/1785425000000-AdicionarVencedorDecisaoPartida';
 import { CriarFilaJogadores1785421000000 } from './migracoes/1785421000000-CriarFilaJogadores';
 import { CriarGruposPelada1785426000000 } from './migracoes/1785426000000-CriarGruposPelada';
@@ -47,4 +48,5 @@ export const MIGRACOES = [
   AumentarMaximoJogadoresPadrao1785530000000,
   AdicionarSubstituicaoTemporaria1785530000000,
   RepararFilaSubstitutosTemporarios1785540000000,
+  CriarAssinaturas1785600000000,
 ];

@@ -1,3 +1,5 @@
+import { readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { criarOpcoesBanco } from './banco.module';
 import { AdicionarGoleirosAvulsosPartida1785427000000 } from './migracoes/1785427000000-AdicionarGoleirosAvulsosPartida';
 import { AdicionarSubstituicaoTemporaria1785530000000 } from './migracoes/1785530000000-AdicionarSubstituicaoTemporaria';
@@ -46,7 +48,15 @@ describe('criarOpcoesBanco', () => {
       throw new Error('A configuracao de migrations deve ser uma lista');
     }
 
-    expect(migracoes).toHaveLength(21);
+    // Uma migracao por arquivo, sem numero magico: a contagem fixa ja quebrou
+    // a cada migracao nova sem nunca ter pegado o defeito que interessa —
+    // criar o arquivo e esquecer de registra-lo na lista. Comparar com o
+    // diretorio pega exatamente isso.
+    const arquivos = readdirSync(join(__dirname, 'migracoes')).filter((a) =>
+      a.endsWith('.ts'),
+    );
+    expect(migracoes).toHaveLength(arquivos.length);
+
     expect(migracoes).toContain(AdicionarGoleirosAvulsosPartida1785427000000);
     expect(migracoes).toContain(AdicionarSubstituicaoTemporaria1785530000000);
     expect(migracoes).toContain(RepararFilaSubstitutosTemporarios1785540000000);
