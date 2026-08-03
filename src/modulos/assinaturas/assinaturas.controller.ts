@@ -19,6 +19,7 @@ import {
 import { AssinaturasService } from './assinaturas.service';
 import { ClienteAsaas } from './cliente-asaas';
 import { AssinarDto } from './dto/assinar.dto';
+import { listarPlanos } from './planos';
 
 @ApiTags('Assinaturas')
 @ApiBearerAuth()
@@ -33,7 +34,15 @@ export class AssinaturasController {
   @ApiOperation({ summary: 'Assinatura do organizador logado' })
   async minha(@UsuarioAtual() u: UsuarioRequisicao) {
     const assinatura = await this.assinaturas.buscarMinha(u.id);
+    // O link so e buscado quando ha cobranca em aberto: a tela precisa dele
+    // para o organizador conseguir pagar, e sem ele o botao some.
+    const linkPagamento =
+      assinatura && assinatura.status !== 'CANCELADA'
+        ? await this.assinaturas.linkDePagamento(u.id)
+        : null;
     return {
+      planos: listarPlanos(),
+      linkPagamento,
       // Sem assinatura nao e erro: e o estado de quem ainda nao assinou, e a
       // tela precisa saber a diferenca entre "nao tem" e "falhou".
       assinatura: assinatura && {
@@ -51,8 +60,7 @@ export class AssinaturasController {
   assinar(@UsuarioAtual() u: UsuarioRequisicao, @Body() dto: AssinarDto) {
     return this.assinaturas.assinar(u.id, {
       cpfCnpj: dto.cpfCnpj,
-      valorCentavos: dto.valorCentavos,
-      ciclo: dto.ciclo,
+      plano: dto.plano,
     });
   }
 

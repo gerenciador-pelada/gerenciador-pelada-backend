@@ -29,6 +29,10 @@ function montar(assinaturaAtual: Partial<AssinaturaEntity> | null = null) {
     habilitado: true,
     criarCliente: jest.fn().mockResolvedValue({ id: 'cus_1' }),
     criarAssinatura: jest.fn().mockResolvedValue({ id: 'sub_1' }),
+    // O fim do ciclo vem da assinatura no Asaas, nao do evento.
+    buscarAssinatura: jest
+      .fn()
+      .mockResolvedValue({ id: 'sub_1', nextDueDate: '2026-09-05' }),
     cancelarAssinatura: jest.fn().mockResolvedValue(undefined),
   } as unknown as ClienteAsaas;
 
@@ -46,10 +50,10 @@ describe('AssinaturasService', () => {
 
       await servico.assinar(USUARIO, {
         cpfCnpj: '123.456.789-09',
-        valorCentavos: 1990,
-        ciclo: 'MONTHLY',
+        plano: 'MENSAL' as const,
       });
 
+      // O preco vem da tabela do servidor: o cliente so escolhe o plano.
       // Nascer ATIVA daria um ciclo de graca a cada nova assinatura.
       expect(salvos[0]).toMatchObject({
         status: StatusAssinatura.VENCIDA,
@@ -74,8 +78,7 @@ describe('AssinaturasService', () => {
       await expect(
         servico.assinar(USUARIO, {
           cpfCnpj: '12345678909',
-          valorCentavos: 1990,
-          ciclo: 'MONTHLY',
+          plano: 'MENSAL' as const,
         }),
       ).rejects.toThrow(/ja tem uma assinatura/i);
       // Cobranca dobrada e o pior erro possivel aqui: nem chega no Asaas.
@@ -91,8 +94,7 @@ describe('AssinaturasService', () => {
 
       await servico.assinar(USUARIO, {
         cpfCnpj: '12345678909',
-        valorCentavos: 1990,
-        ciclo: 'MONTHLY',
+        plano: 'MENSAL' as const,
       });
 
       expect(asaas.criarCliente).not.toHaveBeenCalled();
@@ -107,24 +109,25 @@ describe('AssinaturasService', () => {
       await expect(
         servico.assinar(USUARIO, {
           cpfCnpj: '123',
-          valorCentavos: 1990,
-          ciclo: 'MONTHLY',
+          plano: 'MENSAL' as const,
         }),
       ).rejects.toThrow(ErroRegraPelada);
     });
   });
 
   describe('aplicarEvento', () => {
-    it('libera o acesso ate o vencimento informado pelo Asaas', async () => {
+    it('libera o acesso ate o FIM DO CICLO, nao ate a cobranca paga', async () => {
       const { servico, salvos } = montar({
         id: 'a1',
         status: StatusAssinatura.VENCIDA,
         acessoAte: null,
       });
 
+      // A cobranca paga vencia em 05/08; o ciclo que ela paga vai ate 05/09.
+      // Usar a data do evento dava acesso ate o fim do mesmo dia.
       const r = await servico.aplicarEvento({
         event: 'PAYMENT_CONFIRMED',
-        payment: { subscription: 'sub_1', dueDate: '2026-09-05' },
+        payment: { subscription: 'sub_1', dueDate: '2026-08-05' },
       });
 
       expect(r.aplicado).toBe(true);
@@ -145,11 +148,11 @@ describe('AssinaturasService', () => {
       // O Asaas repete ate receber 200; a segunda vez tem que ser inofensiva.
       await servico.aplicarEvento({
         event: 'PAYMENT_CONFIRMED',
-        payment: { subscription: 'sub_1', dueDate: '2026-09-05' },
+        payment: { subscription: 'sub_1' },
       });
       await servico.aplicarEvento({
         event: 'PAYMENT_CONFIRMED',
-        payment: { subscription: 'sub_1', dueDate: '2026-09-05' },
+        payment: { subscription: 'sub_1' },
       });
 
       expect(salvos[0].acessoAte?.toISOString()).toBe(

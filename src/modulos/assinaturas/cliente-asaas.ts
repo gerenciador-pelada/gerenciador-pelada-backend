@@ -25,6 +25,15 @@ export interface AssinaturaAsaasDto {
   externalReference: string;
 }
 
+export interface CobrancaAsaas {
+  id: string;
+  status: string;
+  dueDate: string;
+  value: number;
+  /** Pagina hospedada pelo Asaas onde o pagador escolhe Pix, boleto ou cartao. */
+  invoiceUrl: string;
+}
+
 export interface AssinaturaAsaas {
   id: string;
   status: string;
@@ -75,6 +84,21 @@ export class ClienteAsaas {
 
   async buscarAssinatura(id: string): Promise<AssinaturaAsaas> {
     return this.requisitar<AssinaturaAsaas>('GET', `/subscriptions/${id}`);
+  }
+
+  /**
+   * Cobrancas da assinatura, da mais recente para a mais antiga.
+   *
+   * E daqui que sai o link de pagamento: a criacao da assinatura nao devolve a
+   * primeira cobranca, entao sem esta consulta a tela criaria a assinatura e
+   * nao teria onde mandar o organizador pagar.
+   */
+  async cobrancasDaAssinatura(id: string): Promise<CobrancaAsaas[]> {
+    const r = await this.requisitar<{ data?: CobrancaAsaas[] }>(
+      'GET',
+      `/subscriptions/${id}/payments?limit=10`,
+    );
+    return r.data ?? [];
   }
 
   async cancelarAssinatura(id: string): Promise<void> {
