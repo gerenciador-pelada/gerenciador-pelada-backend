@@ -25,8 +25,6 @@ export class GruposPeladaService {
   constructor(
     @InjectRepository(GrupoPeladaEntity)
     private readonly grupos: Repository<GrupoPeladaEntity>,
-    @InjectRepository(PeladaEntity)
-    private readonly peladas: Repository<PeladaEntity>,
     private readonly fonteDados: DataSource,
   ) {}
 
@@ -96,16 +94,25 @@ export class GruposPeladaService {
 
   async remover(usuarioId: string, id: string): Promise<void> {
     const grupo = await this.buscarPorId(usuarioId, id);
-    const quantidadeEdicoes = await this.peladas.count({
-      where: { grupoId: id },
-      withDeleted: true,
+    // Cascata: o grupo leva as edicoes junto, numa transacao.
+    //
+    // A regra anterior recusava excluir grupo com qualquer edicao, inclusive
+    // ja excluida — o que prendia o grupo para sempre, porque apagar as
+    // edicoes antes nao ajudava. Agora e um comando so.
+    //
+    // Isso apaga historico de verdade: as pontuacoes daquelas edicoes somem do
+    // ranking (elas so contavam porque o join respeita `deletadoEm`). Quem
+    // chama precisa ter confirmado com clareza — a interface pede o nome da
+    // pelada digitado, e nao um "tem certeza?".
+    await this.fonteDados.transaction(async (gerenciador) => {
+      const edicoes = await gerenciador.find(PeladaEntity, {
+        where: { grupoId: id },
+      });
+      if (edicoes.length > 0) {
+        await gerenciador.softRemove(edicoes);
+      }
+      await gerenciador.softRemove(grupo);
     });
-    if (quantidadeEdicoes > 0) {
-      throw new ConflictException(
-        'Nao e possivel excluir uma pelada que possui edicoes',
-      );
-    }
-    await this.grupos.softRemove(grupo);
   }
 
   private montarResumo(grupo: GrupoPeladaEntity): GrupoPeladaResumo {

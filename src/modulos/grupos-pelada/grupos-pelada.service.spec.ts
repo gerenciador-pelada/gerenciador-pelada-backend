@@ -21,12 +21,11 @@ describe('GruposPeladaService', () => {
     findOne: jest.fn(),
     softRemove: jest.fn(),
   };
-  const peladas = {
-    count: jest.fn(),
-  };
   const gerenciador = {
     save: jest.fn(),
     update: jest.fn(),
+    find: jest.fn(),
+    softRemove: jest.fn(),
   };
   const fonteDados = {
     transaction: jest.fn(),
@@ -55,7 +54,6 @@ describe('GruposPeladaService', () => {
           provide: getRepositoryToken(GrupoPeladaEntity),
           useValue: grupos,
         },
-        { provide: getRepositoryToken(PeladaEntity), useValue: peladas },
         { provide: DataSource, useValue: fonteDados },
       ],
     }).compile();
@@ -155,38 +153,33 @@ describe('GruposPeladaService', () => {
     );
   });
 
-  it('protege o historico recusando excluir grupo com edicoes', async () => {
-    grupos.findOne.mockResolvedValue({
+  // A regra anterior recusava excluir grupo que tivesse qualquer edicao,
+  // inclusive ja excluida — o que prendia o grupo para sempre, porque apagar
+  // as edicoes antes nao ajudava em nada. Virou cascata, por decisao de
+  // produto: um comando so, com confirmacao forte na interface.
+  it('leva as edicoes junto ao excluir o grupo, numa transacao', async () => {
+    const grupo = {
       id: GRUPO,
       organizadorId: DONO,
       nome: 'Pelada',
       edicoes: [],
-    });
-    peladas.count.mockResolvedValue(1);
+    } as unknown as GrupoPeladaEntity;
+    const edicoes = [{ id: 'e1' }, { id: 'e2' }];
+    grupos.findOne.mockResolvedValue(grupo);
+    gerenciador.find.mockResolvedValue(edicoes);
 
-    await expect(servico.remover(DONO, GRUPO)).rejects.toBeInstanceOf(
-      ConflictException,
-    );
-    expect(grupos.softRemove).not.toHaveBeenCalled();
+    await servico.remover(DONO, GRUPO);
+
+    expect(gerenciador.find).toHaveBeenCalledWith(PeladaEntity, {
+      where: { grupoId: GRUPO },
+    });
+    expect(gerenciador.softRemove).toHaveBeenCalledWith(edicoes);
+    expect(gerenciador.softRemove).toHaveBeenCalledWith(grupo);
   });
 
-  it('considera edicoes removidas logicamente ao proteger o historico', async () => {
-    grupos.findOne.mockResolvedValue({
-      id: GRUPO,
-      organizadorId: DONO,
-      nome: 'Pelada',
-      edicoes: [],
-    });
-    peladas.count.mockImplementation((opcoes: { withDeleted?: boolean }) =>
-      Promise.resolve(opcoes.withDeleted ? 1 : 0),
-    );
-
-    await expect(servico.remover(DONO, GRUPO)).rejects.toBeInstanceOf(
-      ConflictException,
-    );
-  });
-
-  it('remove logicamente um grupo vazio', async () => {
+  // `softRemove([])` do TypeORM com lista vazia e chamada inutil; pior, em
+  // algumas versoes ela reclama. O grupo vazio tem que sair mesmo assim.
+  it('exclui grupo sem edicoes sem tentar remover lista vazia', async () => {
     const grupo = {
       id: GRUPO,
       organizadorId: DONO,
@@ -194,10 +187,11 @@ describe('GruposPeladaService', () => {
       edicoes: [],
     } as unknown as GrupoPeladaEntity;
     grupos.findOne.mockResolvedValue(grupo);
-    peladas.count.mockResolvedValue(0);
+    gerenciador.find.mockResolvedValue([]);
 
     await servico.remover(DONO, GRUPO);
 
-    expect(grupos.softRemove).toHaveBeenCalledWith(grupo);
+    expect(gerenciador.softRemove).toHaveBeenCalledTimes(1);
+    expect(gerenciador.softRemove).toHaveBeenCalledWith(grupo);
   });
 });
