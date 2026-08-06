@@ -43,6 +43,7 @@ import { FilaService } from './fila.service';
 import { RankingPublicoService } from './ranking-publico.service';
 import { FinanceiroService } from './financeiro.service';
 import { EstatisticasGrupoService } from './estatisticas-grupo.service';
+import { HistoricoGrupoService } from './historico-grupo.service';
 import { LancamentoManualService } from './lancamento-manual.service';
 import { LancamentoManualDto } from './dto/lancamento-manual.dto';
 import {
@@ -78,6 +79,7 @@ export class PeladasController {
     private readonly rankingPublico_: RankingPublicoService,
     private readonly financeiro: FinanceiroService,
     private readonly estatisticas: EstatisticasGrupoService,
+    private readonly historicoGrupo: HistoricoGrupoService,
     private readonly lancamento: LancamentoManualService,
   ) {}
 
@@ -232,6 +234,18 @@ export class PeladasController {
     @Param('grupoId', ParseUUIDPipe) grupoId: string,
   ) {
     return this.estatisticas.doGrupo(u.id, grupoId);
+  }
+
+  // Mesma razao de vizinhanca: le partidas e eventos, que vivem aqui. E nao se
+  // confunde com `:id/historico`, que e o log de auditoria de uma edicao —
+  // este conta o que aconteceu, aquele registra o que foi feito.
+  @Get('/grupos/:grupoId/historico')
+  @ApiOperation({ summary: 'O que aconteceu em cada edicao do grupo' })
+  historicoDoGrupo(
+    @UsuarioAtual() u: UsuarioRequisicao,
+    @Param('grupoId', ParseUUIDPipe) grupoId: string,
+  ) {
+    return this.historicoGrupo.doGrupo(u.id, grupoId);
   }
 
   @Post(':id/lancamento')

@@ -31,6 +31,7 @@ import { RankingPublicoService } from './ranking-publico.service';
 import { FilaService } from './fila.service';
 import { FinanceiroService } from './financeiro.service';
 import { EstatisticasGrupoService } from './estatisticas-grupo.service';
+import { HistoricoGrupoService } from './historico-grupo.service';
 import { LancamentoManualService } from './lancamento-manual.service';
 
 @Module({
@@ -70,6 +71,7 @@ import { LancamentoManualService } from './lancamento-manual.service';
     FilaService,
     FinanceiroService,
     EstatisticasGrupoService,
+    HistoricoGrupoService,
     LancamentoManualService,
   ],
   exports: [PeladasService, ConfiguracoesService],

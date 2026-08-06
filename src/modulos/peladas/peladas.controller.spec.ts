@@ -32,6 +32,7 @@ describe('PeladasController', () => {
   const rankingPublico = {};
   const financeiro = {};
   const estatisticas = {};
+  const historicoGrupo = {};
   const lancamento = {};
   const controller = new PeladasController(
     peladas as never,
@@ -48,6 +49,7 @@ describe('PeladasController', () => {
     rankingPublico as never,
     financeiro as never,
     estatisticas as never,
+    historicoGrupo as never,
     lancamento as never,
   );
 
