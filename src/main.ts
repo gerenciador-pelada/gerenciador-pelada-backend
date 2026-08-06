@@ -37,7 +37,7 @@ async function iniciar(): Promise<void> {
   const documento = SwaggerModule.createDocument(
     app,
     new DocumentBuilder()
-      .setTitle('Gerenciador de Pelada')
+      .setTitle('Varzeô')
       .setDescription('API de organizacao de peladas de futebol')
       .setVersion('1.0')
       .addBearerAuth()
