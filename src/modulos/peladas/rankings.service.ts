@@ -64,6 +64,14 @@ export class RankingsService {
    *
    * O innerJoin com peladas nao e opcional: sem ele a agregacao somaria a
    * pontuacao de todos os organizadores do sistema numa unica tabela.
+   *
+   * E o `deletadoEm IS NULL` mora na condicao da juncao, nao num `where`
+   * solto. O TypeORM so aplica o filtro de soft delete a entidade principal
+   * da consulta — entidade unida por `innerJoin` explicito entra sem filtro
+   * nenhum. Sem esta linha, excluir uma pelada a tira das listas mas mantem
+   * os pontos dela somando no ranking: uma exclusao que nao exclui. Na
+   * juncao, o filtro viaja junto e nao se perde quando alguem acrescentar
+   * outro `andWhere` depois.
    */
   async listar(
     usuarioId: string,
@@ -76,7 +84,11 @@ export class RankingsService {
 
     const pontuacao = this.pontuacoes
       .createQueryBuilder('p')
-      .innerJoin(PeladaEntity, 'pelada', 'pelada.id = p.peladaId')
+      .innerJoin(
+        PeladaEntity,
+        'pelada',
+        'pelada.id = p.peladaId AND pelada.deletadoEm IS NULL',
+      )
       .innerJoin(JogadorEntity, 'jogador', 'jogador.id = p.jogadorId')
       .select('p.jogadorId', 'jogadorId')
       .addSelect('jogador.nome', 'nome')
@@ -137,7 +149,11 @@ export class RankingsService {
         'participante',
         'participante.id = e.participanteId',
       )
-      .innerJoin(PeladaEntity, 'pelada', 'pelada.id = participante.peladaId')
+      .innerJoin(
+        PeladaEntity,
+        'pelada',
+        'pelada.id = participante.peladaId AND pelada.deletadoEm IS NULL',
+      )
       .select('participante.jogadorId', 'jogadorId')
       .addSelect('e.tipo', 'tipo')
       .addSelect('COUNT(e.id)', 'total')
@@ -168,7 +184,11 @@ export class RankingsService {
         'participante',
         'participante.id = e.participanteRelacionadoId',
       )
-      .innerJoin(PeladaEntity, 'pelada', 'pelada.id = participante.peladaId')
+      .innerJoin(
+        PeladaEntity,
+        'pelada',
+        'pelada.id = participante.peladaId AND pelada.deletadoEm IS NULL',
+      )
       .select('participante.jogadorId', 'jogadorId')
       .addSelect('COUNT(e.id)', 'total')
       .where('pelada.organizadorId = :usuarioId', { usuarioId })

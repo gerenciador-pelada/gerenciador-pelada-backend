@@ -68,7 +68,15 @@ export class PerfilJogadorService {
 
     const totais = await this.pontuacoes
       .createQueryBuilder('p')
-      .innerJoin(PeladaEntity, 'pelada', 'pelada.id = p.peladaId')
+      // `deletadoEm IS NULL` na juncao, e nao num `where`: o TypeORM so aplica
+      // o filtro de soft delete a entidade principal da consulta, e entidade
+      // unida por `innerJoin` explicito entra sem filtro. Sem isto, uma pelada
+      // excluida continuaria somando na ficha do jogador.
+      .innerJoin(
+        PeladaEntity,
+        'pelada',
+        'pelada.id = p.peladaId AND pelada.deletadoEm IS NULL',
+      )
       .select('COUNT(p.id)', 'partidas')
       .addSelect('COALESCE(SUM(p.pontosTotal), 0)', 'pontuacao')
       .addSelect('COUNT(DISTINCT p.peladaId)', 'peladas')
@@ -112,7 +120,11 @@ export class PerfilJogadorService {
         'participante',
         'participante.id = e.participanteId',
       )
-      .innerJoin(PeladaEntity, 'pelada', 'pelada.id = participante.peladaId')
+      .innerJoin(
+        PeladaEntity,
+        'pelada',
+        'pelada.id = participante.peladaId AND pelada.deletadoEm IS NULL',
+      )
       .select('e.tipo', 'tipo')
       .addSelect('COUNT(e.id)', 'total')
       .where('participante.jogadorId = :jogadorId', { jogadorId })
@@ -134,7 +146,11 @@ export class PerfilJogadorService {
         'participante',
         'participante.id = e.participanteRelacionadoId',
       )
-      .innerJoin(PeladaEntity, 'pelada', 'pelada.id = participante.peladaId')
+      .innerJoin(
+        PeladaEntity,
+        'pelada',
+        'pelada.id = participante.peladaId AND pelada.deletadoEm IS NULL',
+      )
       .select('COUNT(e.id)', 'total')
       .where('participante.jogadorId = :jogadorId', { jogadorId })
       .andWhere('pelada.organizadorId = :usuarioId', { usuarioId })
