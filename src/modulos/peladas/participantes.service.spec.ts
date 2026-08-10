@@ -319,3 +319,88 @@ describe('ParticipantesService.alterarGoleiroFixo', () => {
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 });
+
+/**
+ * O caminho de volta de quem desistiu.
+ *
+ * Isto nasceu de um incidente real: durante um jogo alguém tirou um jogador
+ * por engano e não conseguiu recolocá-lo. `retornar` recusa quem desistiu
+ * dizendo "precisa ser adicionado de novo", e `adicionar` recusava com "já
+ * participa da pelada" — a linha continua existindo, só com outro status. A
+ * mensagem mandava fazer exatamente o que era impossível.
+ */
+describe('ParticipantesService.adicionar de quem desistiu', () => {
+  function montar(participanteExistente: object | null) {
+    const salvos: object[] = [];
+    const participantes = {
+      findOne: jest.fn().mockResolvedValue(participanteExistente),
+      save: jest.fn().mockImplementation((p: object) => {
+        salvos.push(p);
+        return Promise.resolve(p);
+      }),
+      create: jest.fn().mockImplementation((p: object) => p),
+      count: jest.fn().mockResolvedValue(0),
+    };
+    const servico = new ParticipantesService(
+      {
+        findOne: jest.fn().mockResolvedValue({
+          id: PELADA,
+          status: StatusPelada.EM_ANDAMENTO,
+          configuracao: { maximoJogadores: 20 },
+        }),
+      } as never,
+      { findOne: jest.fn().mockResolvedValue({ id: 'jog-1' }) } as never,
+      participantes as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as unknown as DataSource,
+    );
+    return { servico, salvos };
+  }
+
+  it('devolve quem desistiu ao estado anterior em vez de recusar', async () => {
+    const { servico, salvos } = montar({
+      id: 'part-1',
+      status: StatusParticipantePelada.DESISTIU,
+      chegadaEm: new Date(),
+      ehGoleiroFixo: false,
+    });
+
+    await servico.adicionar('dono', PELADA, { jogadorId: 'jog-1' } as never);
+
+    // Já tinha chegado, então volta jogável — e não como quem ainda vai chegar.
+    expect(salvos[0]).toMatchObject({
+      id: 'part-1',
+      status: StatusParticipantePelada.PRESENTE,
+    });
+  });
+
+  it('quem nunca chegou volta como confirmado', async () => {
+    const { servico, salvos } = montar({
+      id: 'part-2',
+      status: StatusParticipantePelada.DESISTIU,
+      chegadaEm: null,
+      ehGoleiroFixo: false,
+    });
+
+    await servico.adicionar('dono', PELADA, { jogadorId: 'jog-1' } as never);
+
+    expect(salvos[0]).toMatchObject({
+      status: StatusParticipantePelada.CONFIRMADO,
+    });
+  });
+
+  it('continua recusando quem ja participa de verdade', async () => {
+    const { servico } = montar({
+      id: 'part-3',
+      status: StatusParticipantePelada.PRESENTE,
+      chegadaEm: new Date(),
+    });
+
+    await expect(
+      servico.adicionar('dono', PELADA, { jogadorId: 'jog-1' } as never),
+    ).rejects.toMatchObject({ codigo: 'PARTICIPANTE_DUPLICADO' });
+  });
+});

@@ -54,15 +54,37 @@ export class ParticipantesService {
       }))
     )
       throw new NotFoundException('Jogador nao encontrado');
-    if (
-      await this.participantes.findOne({
-        where: { peladaId, jogadorId: dto.jogadorId },
-      })
-    )
-      throw new ErroRegraPelada(
-        'PARTICIPANTE_DUPLICADO',
-        'Jogador ja participa da pelada',
-      );
+    const existente = await this.participantes.findOne({
+      where: { peladaId, jogadorId: dto.jogadorId },
+    });
+
+    // Quem desistiu volta por aqui, e nao e erro.
+    //
+    // Antes isto era um beco sem saida: `retornar` recusa quem desistiu com a
+    // mensagem "precisa ser adicionado de novo", e `adicionar` recusava com
+    // "ja participa da pelada" — porque a linha continua existindo, so com
+    // outro status. A mensagem mandava fazer exatamente o que era impossivel,
+    // e uma remocao por engano no meio do jogo nao tinha volta.
+    //
+    // A pessoa volta ao estado em que estava: quem ja tinha chegado volta como
+    // PRESENTE, quem so estava confirmado volta como CONFIRMADO. Nao entra na
+    // fila sozinha — reentrar na fila e decisao do organizador, e faze-lo aqui
+    // furaria a ordem de quem esta esperando.
+    if (existente) {
+      if (existente.status !== StatusParticipantePelada.DESISTIU)
+        throw new ErroRegraPelada(
+          'PARTICIPANTE_DUPLICADO',
+          'Jogador ja participa da pelada',
+        );
+
+      existente.status = existente.chegadaEm
+        ? StatusParticipantePelada.PRESENTE
+        : StatusParticipantePelada.CONFIRMADO;
+      if (dto.ehGoleiroFixo !== undefined)
+        existente.ehGoleiroFixo = dto.ehGoleiroFixo;
+      return this.participantes.save(existente);
+    }
+
     if (
       (await this.participantes.count({ where: { peladaId } })) >=
       pelada.configuracao.maximoJogadores
