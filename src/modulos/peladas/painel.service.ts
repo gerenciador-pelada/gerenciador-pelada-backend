@@ -10,6 +10,7 @@ import { PartidaEntity } from '../../banco/entidades/partida.entity';
 import { PeladaEntity } from '../../banco/entidades/pelada.entity';
 import { TimeEntity } from '../../banco/entidades/time.entity';
 import { StatusPartida } from '../../comum/enums/status-partida.enum';
+import { TipoEventoPartida } from '../../comum/enums/tipo-evento-partida.enum';
 import { StatusParticipantePelada } from '../../comum/enums/status-participante-pelada.enum';
 import { StatusPelada } from '../../comum/enums/status-pelada.enum';
 
@@ -124,6 +125,36 @@ export class PainelService {
         })
       : [];
 
+    /**
+     * Gols e assistencias de cada um NESTA partida.
+     *
+     * Consulta separada de `eventos` de proposito. Aquela e a lista "agora ha
+     * pouco" e por isso tem `take: 10`; se a contagem saisse dela, o decimo
+     * primeiro gol da partida sumiria do placar ao lado do nome.
+     *
+     * Vai por id, e nao por nome: o cartao mostra `apelido ?? nome`, e casar
+     * texto erraria justamente em quem tem apelido.
+     */
+    const todosOsEventos = partidaDeReferencia
+      ? await this.eventos.find({
+          where: { partidaId: partidaDeReferencia.id },
+          select: { tipo: true, participanteId: true, participanteRelacionadoId: true },
+        })
+      : [];
+
+    const numerosDaPartida = new Map<string, { gols: number; assistencias: number }>();
+    const acumular = (id: string, campo: 'gols' | 'assistencias') => {
+      const atual = numerosDaPartida.get(id) ?? { gols: 0, assistencias: 0 };
+      atual[campo] += 1;
+      numerosDaPartida.set(id, atual);
+    };
+    for (const evento of todosOsEventos) {
+      if (evento.tipo !== TipoEventoPartida.GOL) continue;
+      acumular(evento.participanteId, 'gols');
+      if (evento.participanteRelacionadoId)
+        acumular(evento.participanteRelacionadoId, 'assistencias');
+    }
+
     const registrosFila = await this.fila.find({
       where: { peladaId, ativo: true },
       order: { posicao: 'ASC' },
@@ -173,6 +204,9 @@ export class PainelService {
             null)
           : null,
       })),
+      numerosDaPartida: [...numerosDaPartida.entries()].map(
+        ([participanteId, n]) => ({ participanteId, ...n }),
+      ),
       totalPresentes: participantes.filter((p) => p.ordemChegada !== null)
         .length,
       // Separado de propósito: o sorteio exige jogadores de LINHA, e contar
