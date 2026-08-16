@@ -121,4 +121,46 @@ export class AutenticacaoService {
     });
     return { usuario: publico, token };
   }
+
+  /**
+   * A pessoa exclui a propria conta.
+   *
+   * Existe porque a App Store recusa app que cria conta e nao deixa apaga-la
+   * pelo proprio app (diretriz 5.1.1(v)) — e desativar nao conta, precisa ser
+   * exclusao.
+   *
+   * Mora aqui e nao em `UsuariosService` porque aquele controller inteiro e
+   * `@Perfis(ADMINISTRADOR)`: a rota precisa ser alcancavel por quem esta so
+   * autenticado, que e todo mundo.
+   *
+   * O que acontece na hora:
+   *
+   * - a identidade e apagada de verdade. Nome, e-mail e senha saem do banco
+   *   agora, e nao daqui a trinta dias: sao o dado mais identificavel que
+   *   existe aqui, e nao ha razao para segura-los;
+   * - a conta some. `softRemove` mais `ativo: false` fecham as duas portas —
+   *   `findOne` ignora registro removido logicamente tanto no login quanto na
+   *   validacao do token, entao sessao aberta em outro aparelho tambem cai;
+   * - as peladas ficam ate o expurgo. Elas guardam nomes de terceiros e
+   *   historico de partidas, e apaga-las em cascata aqui esbarraria nos
+   *   `RESTRICT` que protegem o autor de cada gol.
+   *
+   * O e-mail vira endereco invalido e unico em vez de sumir para nulo porque o
+   * indice de e-mail e unico e NAO e parcial: mantendo o endereco real, a
+   * pessoa nunca mais conseguiria se cadastrar de novo com ele.
+   */
+  async excluirPropriaConta(usuarioId: string): Promise<void> {
+    const usuario = await this.usuarios.findOne({ where: { id: usuarioId } });
+    if (!usuario) throw new UnauthorizedException('Sessao invalida');
+
+    usuario.nome = 'Conta excluida';
+    usuario.email = `excluido-${usuario.id}@invalido.local`;
+    // Nao fica vazio: a coluna nao aceita nulo, e um hash invalido garante que
+    // nenhuma senha do mundo confira caso a linha reapareca por engano.
+    usuario.senhaHash = 'conta-excluida';
+    usuario.ativo = false;
+
+    await this.usuarios.save(usuario);
+    await this.usuarios.softRemove(usuario);
+  }
 }

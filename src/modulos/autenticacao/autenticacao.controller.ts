@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -48,5 +49,18 @@ export class AutenticacaoController {
   @ApiOperation({ summary: 'Devolve o usuario autenticado' })
   perfil(@UsuarioAtual() usuario: UsuarioRequisicao) {
     return usuario;
+  }
+
+  /**
+   * Exclui a conta de quem esta chamando. Sem parametro de id: o alvo e sempre
+   * o dono do token, entao nao existe forma de apontar esta rota para outra
+   * pessoa.
+   */
+  @Delete('conta')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Exclui a conta do usuario autenticado' })
+  async excluirConta(@UsuarioAtual() usuario: UsuarioRequisicao) {
+    await this.autenticacao.excluirPropriaConta(usuario.id);
   }
 }

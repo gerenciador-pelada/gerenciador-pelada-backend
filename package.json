@@ -22,7 +22,8 @@
     "banco:parar": "docker compose down",
     "migracao:gerar": "typeorm-ts-node-commonjs migration:generate -d src/banco/fonte-dados.ts",
     "migracao:rodar": "typeorm-ts-node-commonjs migration:run -d src/banco/fonte-dados.ts",
-    "migracao:reverter": "typeorm-ts-node-commonjs migration:revert -d src/banco/fonte-dados.ts"
+    "migracao:reverter": "typeorm-ts-node-commonjs migration:revert -d src/banco/fonte-dados.ts",
+    "contas:expurgar": "ts-node -r tsconfig-paths/register src/banco/expurgar-contas.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

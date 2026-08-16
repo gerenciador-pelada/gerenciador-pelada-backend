@@ -35,6 +35,34 @@ escrito em código. Tudo vem de `ConfiguracaoPeladaEntity`.
 - `npm run banco:subir`     — sobe o PostgreSQL no Docker
 - `npm run migracao:gerar -- src/banco/migracoes/NomeDaMigracao`
 - `npm run migracao:rodar`  — aplica migrações pendentes
+- `npm run contas:expurgar` — apaga de vez as contas excluídas há mais de 30 dias
+  (`-- --simular` só lista)
+
+## Exclusão de conta
+
+A App Store recusa app que cria conta e não deixa apagá-la pelo próprio app
+(diretriz 5.1.1(v)). `DELETE /api/autenticacao/conta` é essa saída, e ela apaga
+de verdade — desativar não cumpre a diretriz.
+
+O modelo é bloqueio imediato mais expurgo em 30 dias:
+
+- **na hora** — nome, e-mail e senha saem do banco, `ativo` vira falso e a linha
+  é removida logicamente. Login e token caem no mesmo instante, porque os dois
+  passam por `findOne`, que ignora removido logicamente. O e-mail vira endereço
+  inválido e único em vez de sumir: o índice de e-mail é único e **não** é
+  parcial, então guardar o endereço real impediria a pessoa de se cadastrar
+  outra vez;
+- **em 30 dias** — `npm run contas:expurgar` apaga peladas, partidas, jogadores
+  e rankings. A ordem dos passos está em `src/modulos/usuarios/expurgo-contas.ts`
+  e não é estética: o banco protege com `RESTRICT` o autor de cada gol, o
+  participante de cada pelada e o local de cada pelada. Cinco tabelas guardam
+  `pelada_id` sem chave estrangeira e por isso precisam estar na lista à mão.
+
+O prazo de 30 dias está escrito na política de privacidade do site e na tela de
+confirmação dos dois clientes. Mudar `DIAS_ATE_EXPURGO` sem mudar os três deixa
+a promessa mentirosa.
+
+**O expurgo ainda não está agendado.** Ele roda quando alguém chama o comando.
 
 ## Segurança
 

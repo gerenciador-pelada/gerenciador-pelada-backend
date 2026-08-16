@@ -17,6 +17,7 @@ describe('AutenticacaoService', () => {
     findOne: jest.fn(),
     create: jest.fn(),
     save: jest.fn(),
+    softRemove: jest.fn(),
     createQueryBuilder: jest.fn(),
   };
   const jwt = { signAsync: jest.fn() };
@@ -220,6 +221,73 @@ describe('AutenticacaoService', () => {
           perfil: PerfilUsuario.ORGANIZADOR,
         }),
       );
+    });
+  });
+
+  // A App Store recusa app que cria conta e nao deixa apaga-la. Se este
+  // comportamento regredir, a publicacao volta a ser barrada — e, pior, alguem
+  // que pediu exclusao continua no banco com nome e e-mail.
+  describe('excluirPropriaConta', () => {
+    const contaSalva = () => repositorio.save.mock.calls[0][0] as UsuarioEntity;
+
+    function prepararConta(): Partial<UsuarioEntity> {
+      const usuario = {
+        id: 'usuario-1',
+        nome: 'Lucas',
+        email: 'lucas@exemplo.com',
+        senhaHash: 'hash-real',
+        perfil: PerfilUsuario.ORGANIZADOR,
+        ativo: true,
+      };
+      repositorio.findOne.mockResolvedValue(usuario);
+      repositorio.save.mockImplementation((dados: UsuarioEntity) =>
+        Promise.resolve(dados),
+      );
+      return usuario;
+    }
+
+    it('apaga nome, e-mail e senha do banco', async () => {
+      prepararConta();
+
+      await servico.excluirPropriaConta('usuario-1');
+
+      const salva = contaSalva();
+      expect(salva.nome).not.toBe('Lucas');
+      expect(salva.email).not.toBe('lucas@exemplo.com');
+      expect(salva.senhaHash).not.toBe('hash-real');
+    });
+
+    it('remove a conta logicamente e a desativa — as duas portas do login', async () => {
+      prepararConta();
+
+      await servico.excluirPropriaConta('usuario-1');
+
+      expect(contaSalva().ativo).toBe(false);
+      expect(repositorio.softRemove).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'usuario-1' }),
+      );
+    });
+
+    // O indice de e-mail e unico e nao e parcial: se o endereco real ficasse
+    // gravado, a pessoa nunca mais conseguiria se cadastrar com ele.
+    it('libera o e-mail para um novo cadastro', async () => {
+      prepararConta();
+
+      await servico.excluirPropriaConta('usuario-1');
+
+      expect(contaSalva().email).toContain('usuario-1');
+      expect(contaSalva().email).not.toContain('lucas@exemplo.com');
+    });
+
+    it('recusa token de conta que ja nao existe', async () => {
+      repositorio.findOne.mockResolvedValue(null);
+
+      await expect(servico.excluirPropriaConta('sumiu')).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+
+      expect(repositorio.save).not.toHaveBeenCalled();
+      expect(repositorio.softRemove).not.toHaveBeenCalled();
     });
   });
 });
