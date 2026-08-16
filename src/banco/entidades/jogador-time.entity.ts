@@ -41,6 +41,20 @@ export class JogadorTimeEntity {
   @JoinColumn({ name: 'substitui_participante_id' })
   substituiParticipante: ParticipantePeladaEntity | null;
 
+  /**
+   * Posicao que a pessoa ocupava na fila quando este time foi montado.
+   *
+   * E o que carrega a espera atraves da partida. A fila e FIFO, mas entrar em
+   * campo apagava o lugar de cada um: quando o time perdia, a rotacao remontava
+   * a fila por `ordemChegada` — a que horas a pessoa chegou na pelada, que nao
+   * diz nada sobre ha quanto tempo ela esta parada. Quem chegou por ultimo
+   * voltava para o fim do proprio grupo mesmo tendo sido o primeiro da fila.
+   *
+   * Zero e o primeiro. Goleiro fixo tambem recebe um valor, mas ele nunca entra
+   * na fila, entao o numero dele nao decide nada.
+   */
+  @Column({ type: 'int', default: 0 }) ordemEntrada: number;
+
   @Column({ default: false }) ehGoleiro: boolean;
   @Column({ default: true }) ativo: boolean;
   @CreateDateColumn({ type: 'timestamptz' }) entrouEm: Date;

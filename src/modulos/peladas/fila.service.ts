@@ -218,12 +218,15 @@ export class FilaService {
         // A vaga continua pertencendo a quem esta FORA. O novo membro e uma
         // cobertura temporaria, que pode ser devolvida sem inverter os dois
         // jogadores quando o titular retornar.
+        // Herda tambem o lugar da vaga na fila interna do time: quem cobre
+        // ocupa o posto de quem esta fora, nao um posto novo na frente dele.
         await gerenciador.save(
           gerenciador.create(JogadorTimeEntity, {
             timeId: vaga.timeId,
             participanteId,
             substituiParticipanteId: saiId,
             ehGoleiro: vaga.ehGoleiro,
+            ordemEntrada: vaga.ordemEntrada,
             ativo: true,
             saiuEm: null,
           }),
@@ -294,10 +297,19 @@ export class FilaService {
       );
 
     return this.fonteDados.transaction(async (gerenciador) => {
+      // Entra no fim da fila interna do time: o buraco que ele tapa nao tem
+      // dono, entao nao ha posto para herdar.
+      const { maximo } = (await gerenciador
+        .createQueryBuilder(JogadorTimeEntity, 'membro')
+        .select('MAX(membro.ordem_entrada)', 'maximo')
+        .where('membro.time_id = :timeId', { timeId })
+        .getRawOne<{ maximo: number | null }>()) ?? { maximo: null };
+
       await gerenciador.save(
         gerenciador.create(JogadorTimeEntity, {
           timeId,
           participanteId,
+          ordemEntrada: (maximo ?? -1) + 1,
           ativo: true,
           ehGoleiro: false,
           saiuEm: null,

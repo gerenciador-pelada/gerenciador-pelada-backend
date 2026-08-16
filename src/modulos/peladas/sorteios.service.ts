@@ -186,12 +186,16 @@ export class SorteiosService {
         : []),
     ];
 
+    // O sorteio ja entrega a linha ordenada por chegada; guardar essa ordem em
+    // `ordemEntrada` faz o primeiro time voltar para a fila na mesma ordem em
+    // que entrou, como qualquer time montado depois dele.
     await gerenciador.save(
-      elenco.map((e) =>
+      elenco.map((e, indice) =>
         gerenciador.create(JogadorTimeEntity, {
           timeId: time.id,
           participanteId: e.participanteId,
           ehGoleiro: e.ehGoleiro,
+          ordemEntrada: indice,
           ativo: true,
           saiuEm: null,
         }),

@@ -3,6 +3,14 @@ import { ErroRegraPelada } from '../erros/erro-regra-pelada';
 
 export interface JogadorRotacao {
   id: string;
+  /**
+   * A que horas a pessoa apareceu na pelada.
+   *
+   * Serve para o sorteio inicial e para desempatar entre quem sai junto. **Nao
+   * serve para ordenar a fila**: chegar cedo nao e a mesma coisa que estar
+   * esperando ha mais tempo, e confundir as duas foi exatamente o que fazia
+   * quem chegou por ultimo perder o lugar que ja tinha conquistado.
+   */
   ordemChegada: number;
   /**
    * Quantas partidas desta edicao a pessoa ja jogou.
@@ -19,46 +27,85 @@ export interface JogadorRotacao {
 }
 export interface TimeRotacao {
   id: string;
+  /**
+   * O elenco **na ordem em que o time foi montado**, que e a ordem que essas
+   * pessoas tinham na fila quando entraram.
+   *
+   * Esta ordem e o que carrega a espera atraves da partida, e por isso ela e
+   * um contrato, nao um detalhe: quem monta este objeto precisa ler o elenco
+   * ordenado por `ordemEntrada`. Entregar aqui o resultado de uma consulta sem
+   * `ORDER BY` devolve o time para a fila embaralhado.
+   */
   jogadores: JogadorRotacao[];
   partidasConsecutivas: number;
   vitoriasConsecutivas?: number;
 }
 export interface ResultadoRotacao {
-  permanece: TimeRotacao;
-  sai: TimeRotacao;
-  fila: JogadorRotacao[];
-  proximo: JogadorRotacao[];
+  /** Quem forma o(s) proximo(s) time(s), ja na ordem do novo elenco. */
+  entram: JogadorRotacao[];
+  /** Quem continua esperando, na ordem da fila. */
+  sobra: JogadorRotacao[];
 }
 
 export class MotorPelada {
+  /**
+   * Decide quem entra e quem continua esperando quando uma partida acaba.
+   *
+   * A fila e FIFO de verdade: quem esta esperando ha mais tempo entra primeiro,
+   * e nada reordena quem ja estava parado. Quem sai de campo entra atras de
+   * todo mundo que estava aguardando, preservando a ordem interna do time —
+   * essa ordem e a propria ordem de fila que eles tinham quando entraram.
+   *
+   * O caso que motivou isso: numa pelada de times de 6, a fila era
+   * `[time completo, Teste 8]`. O time completo entrou, o Teste 8 virou o
+   * primeiro da fila e formou o time seguinte na frente de cinco que acabavam
+   * de perder. Quando esse time dele perdeu, a rotacao remontava a fila por
+   * `ordemChegada` — e o Teste 8, que tinha chegado por ultimo na pelada, caia
+   * para o fim do proprio grupo e ficava de fora do time seguinte, depois de
+   * ter esperado mais que todos eles.
+   *
+   * `ordemChegada` continua valendo em um lugar so: desempatar entre os que
+   * saem do mesmo time disputando as vagas que a fila nao preencheu.
+   */
   static rotacionar(
-    vencedor: TimeRotacao,
-    perdedor: TimeRotacao,
+    saem: TimeRotacao[],
     fila: JogadorRotacao[],
-    tamanho: number,
+    vagas: number,
   ): ResultadoRotacao {
-    const proximo = fila.slice(0, tamanho);
-    const faltam = tamanho - proximo.length;
-    // Completa com quem jogou menos. Por `ordemChegada` quem acabou de entrar
-    // saia junto com o time, enquanto alguem em campo ha varias partidas
-    // ficava — o contrario do que a pelada entende por vez.
-    const complemento = [...perdedor.jogadores]
+    const jogadoresQueSaem = saem.flatMap((time) => time.jogadores);
+    const daFila = fila.slice(0, vagas);
+    const naFila = new Set(fila.map((jogador) => jogador.id));
+
+    // Quando a fila nao fecha o time, quem completa e quem jogou menos — nao
+    // quem chegou mais cedo na pelada.
+    //
+    // Ordenar por `ordemChegada` aqui punia justamente quem acabou de entrar:
+    // vinha da fila para preencher uma vaga, o time perdia em seguida, e ele
+    // saia na mesma hora, enquanto alguem que estava em campo ha quatro
+    // partidas ficava. Quem acabou de entrar e o ultimo a sair.
+    const complemento = jogadoresQueSaem
+      .filter((jogador) => !naFila.has(jogador.id))
       .sort(
         (a, b) =>
           a.partidasJogadas - b.partidasJogadas ||
           a.ordemChegada - b.ordemChegada,
       )
-      .slice(0, faltam);
+      .slice(0, Math.max(0, vagas - daFila.length));
+
+    const entram = [...daFila, ...complemento];
+    const entrou = new Set(entram.map((jogador) => jogador.id));
+
     return {
-      permanece: vencedor,
-      sai: perdedor,
-      proximo: [...proximo, ...complemento],
-      fila: [
-        ...fila.slice(tamanho),
-        ...perdedor.jogadores.filter(
-          (p) => !complemento.some((c) => c.id === p.id),
-        ),
-      ].sort((a, b) => a.ordemChegada - b.ordemChegada),
+      entram,
+      sobra: [
+        // Quem ja esperava mantem exatamente a posicao que tinha. Nenhuma
+        // ordenacao passa por cima desta lista.
+        ...fila.slice(daFila.length),
+        // E quem sai de campo entra atras deles, na ordem do proprio time.
+        // Quando os dois times saem (empate com AMBOS_SAEM), vale a ordem em
+        // que `saem` chega: casa antes do visitante.
+        ...jogadoresQueSaem.filter((jogador) => !entrou.has(jogador.id)),
+      ],
     };
   }
   static empate(

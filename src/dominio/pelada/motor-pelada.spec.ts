@@ -5,21 +5,24 @@ const j = (id: string, ordemChegada: number, partidasJogadas = 0) => ({
   ordemChegada,
   partidasJogadas,
 });
+const time = (id: string, jogadores: ReturnType<typeof j>[]) => ({
+  id,
+  jogadores,
+  partidasConsecutivas: 1,
+});
+
 describe('MotorPelada', () => {
   it('completa o proximo time com quem jogou menos', () => {
     const r = MotorPelada.rotacionar(
-      { id: 'a', jogadores: [j('a', 1)], partidasConsecutivas: 1 },
-      {
-        id: 'b',
+      [
         // `b2` chegou depois na pelada, mas ja jogou tres partidas; `b1`
         // jogou uma. Fica quem jogou menos.
-        jogadores: [j('b2', 2, 3), j('b1', 1, 1)],
-        partidasConsecutivas: 1,
-      },
+        time('b', [j('b2', 2, 3), j('b1', 1, 1)]),
+      ],
       [j('f', 3)],
       2,
     );
-    expect(r.proximo.map((x) => x.id)).toEqual(['f', 'b1']);
+    expect(r.entram.map((x) => x.id)).toEqual(['f', 'b1']);
   });
   it('faz sair time com duas vitorias consecutivas no empate', () =>
     expect(
@@ -119,23 +122,20 @@ describe('MotorPelada.empate sem criterio de desempate', () => {
     // O caso relatado: quem veio da fila preencher uma vaga e o time perdeu
     // em seguida. Ele e o mais novo em campo, entao e o ultimo a sair.
     const r = MotorPelada.rotacionar(
-      { id: 'a', jogadores: [j('venceu', 1, 3)], partidasConsecutivas: 1 },
-      {
-        id: 'b',
-        jogadores: [
+      [
+        time('b', [
           j('ha tres partidas', 1, 3),
           j('ha tres partidas 2', 2, 3),
           j('acabou de entrar', 9, 1),
-        ],
-        partidasConsecutivas: 1,
-      },
+        ]),
+      ],
       [],
       2,
     );
-    expect(r.proximo.map((x) => x.id)).toEqual([
+    expect(r.entram.map((x) => x.id)).toEqual([
       'acabou de entrar',
       'ha tres partidas',
     ]);
-    expect(r.fila.map((x) => x.id)).toEqual(['ha tres partidas 2']);
+    expect(r.sobra.map((x) => x.id)).toEqual(['ha tres partidas 2']);
   });
 });

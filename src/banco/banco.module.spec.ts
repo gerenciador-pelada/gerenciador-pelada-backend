@@ -2,6 +2,7 @@ import { criarOpcoesBanco } from './banco.module';
 import { AdicionarGoleirosAvulsosPartida1785427000000 } from './migracoes/1785427000000-AdicionarGoleirosAvulsosPartida';
 import { AdicionarSubstituicaoTemporaria1785530000000 } from './migracoes/1785530000000-AdicionarSubstituicaoTemporaria';
 import { RepararFilaSubstitutosTemporarios1785540000000 } from './migracoes/1785540000000-RepararFilaSubstitutosTemporarios';
+import { AdicionarOrdemEntradaJogadorTime1785550000000 } from './migracoes/1785550000000-AdicionarOrdemEntradaJogadorTime';
 
 const ambienteBanco = {
   BANCO_HOST: 'localhost',
@@ -46,10 +47,11 @@ describe('criarOpcoesBanco', () => {
       throw new Error('A configuracao de migrations deve ser uma lista');
     }
 
-    expect(migracoes).toHaveLength(21);
+    expect(migracoes).toHaveLength(22);
     expect(migracoes).toContain(AdicionarGoleirosAvulsosPartida1785427000000);
     expect(migracoes).toContain(AdicionarSubstituicaoTemporaria1785530000000);
     expect(migracoes).toContain(RepararFilaSubstitutosTemporarios1785540000000);
+    expect(migracoes).toContain(AdicionarOrdemEntradaJogadorTime1785550000000);
     expect(migracoes.every((migracao) => typeof migracao === 'function')).toBe(
       true,
     );

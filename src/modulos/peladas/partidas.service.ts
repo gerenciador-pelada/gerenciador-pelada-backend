@@ -473,13 +473,18 @@ export class PartidasService {
         });
       }
 
-      // Entra no time e na partida, herdando o papel.
+      // Entra no time e na partida, herdando o papel — e o lugar na fila que a
+      // vaga carrega. Quem assume a vaga assume a espera dela; sem isso o
+      // substituto entraria como primeiro do time quando ele voltasse a fila.
       await gerenciador.save(
         gerenciador.create(JogadorTimeEntity, {
           timeId,
           participanteId: entraId,
           substituiParticipanteId,
           ehGoleiro,
+          ordemEntrada:
+            membroSai?.ordemEntrada ??
+            (await this.proximaOrdemEntrada(gerenciador, timeId)),
           ativo: true,
           saiuEm: null,
         }),
@@ -765,24 +770,17 @@ export class PartidasService {
     const tamanhoTime = configuracao.jogadoresLinhaPorTime;
     const vagas = permanece ? tamanhoTime : tamanhoTime * 2;
 
-    const daFila = fila.slice(0, vagas);
-    const idsNaFila = new Set(fila.map((jogador) => jogador.id));
-    // Quando a fila nao fecha o time, quem completa e quem jogou menos — nao
-    // quem chegou mais cedo na pelada.
+    // Quem entra e quem continua esperando e regra de pelada, entao mora no
+    // dominio. Este servico so persiste o que ela decidiu.
     //
-    // Ordenar por `ordemChegada` aqui punia justamente quem acabou de entrar:
-    // vinha da fila para preencher uma vaga, o time perdia em seguida, e ele
-    // saia na mesma hora, enquanto alguem que estava em campo ha quatro
-    // partidas ficava. Quem acabou de entrar e o ultimo a sair.
-    const complemento = jogadoresQueSaem
-      .filter((jogador) => !idsNaFila.has(jogador.id))
-      .sort(
-        (a, b) =>
-          a.partidasJogadas - b.partidasJogadas ||
-          a.ordemChegada - b.ordemChegada,
-      )
-      .slice(0, Math.max(0, vagas - daFila.length));
-    const entram = [...daFila, ...complemento];
+    // Havia uma segunda copia desta regra aqui, e `MotorPelada.rotacionar`
+    // tinha virado codigo morto — as duas divergiram, e foi na copia que a
+    // fila deixou de ser FIFO.
+    const { entram, sobra: aguardando } = MotorPelada.rotacionar(
+      saem,
+      fila,
+      vagas,
+    );
 
     for (const time of saem) {
       await gerenciador.update(TimeEntity, time.id, {
@@ -820,22 +818,10 @@ export class PartidasService {
       });
     }
 
-    // Quem ja esperava mantem a posicao que tinha; quem sai de campo entra
-    // atras de todos eles.
-    //
-    // Antes isto reordenava a fila inteira por `ordemChegada`, o que anulava
-    // a espera: quem chegou cedo voltava para a frente por mais recente que
-    // tivesse jogado, e quem chegou tarde ficava preso no fim para sempre —
-    // o grupo "depois deles" nunca entrava. A fila e uma fila: o que da a vez
-    // e ha quanto tempo a pessoa esta parada, nao a que horas ela chegou.
-    //
-    // `ordemChegada` continua valendo, mas so para desempatar entre os que
-    // saem juntos do mesmo time.
+    // Quem cobriu a vaga de alguem que estava FORA volta para o fim: ele nunca
+    // esteve na fila durante a partida, entao nao ha posicao guardada para ele.
     const sobra = [
-      ...fila.slice(daFila.length),
-      ...jogadoresQueSaem
-        .filter((j) => !entram.some((c) => c.id === j.id))
-        .sort((a, b) => a.ordemChegada - b.ordemChegada),
+      ...aguardando,
       ...substitutosQueVoltamFila.filter(
         (substituto) =>
           !fila.some((jogador) => jogador.id === substituto.id) &&
@@ -915,17 +901,20 @@ export class PartidasService {
       }),
     );
 
+    // `jogadores` chega na ordem da fila, e e essa ordem que `ordemEntrada`
+    // guarda: e o que devolve cada um para o lugar certo quando o time perder.
     const elenco = [
       ...jogadores.map((j) => ({ participanteId: j.id, ehGoleiro: false })),
       ...goleirosFixos.map((id) => ({ participanteId: id, ehGoleiro: true })),
     ];
 
     await gerenciador.save(
-      elenco.map((membro) =>
+      elenco.map((membro, indice) =>
         gerenciador.create(JogadorTimeEntity, {
           timeId: time.id,
           participanteId: membro.participanteId,
           ehGoleiro: membro.ehGoleiro,
+          ordemEntrada: indice,
           ativo: true,
           saiuEm: null,
         }),
@@ -950,8 +939,13 @@ export class PartidasService {
     jogadasPorParticipante: Map<string, number>,
   ): Promise<TimeRotacao> {
     const time = await gerenciador.findOneByOrFail(TimeEntity, { id: timeId });
+    // A ordem importa e por isso e pedida ao banco. Sem `ORDER BY` o Postgres
+    // devolve na ordem que quiser, e o time voltava para a fila embaralhado —
+    // `MotorPelada.rotacionar` recebe este elenco como a ordem de fila que
+    // essas pessoas tinham quando entraram.
     const elenco = await gerenciador.find(JogadorTimeEntity, {
       where: { timeId, ativo: true },
+      order: { ordemEntrada: 'ASC', entrouEm: 'ASC' },
     });
     const participantes = elenco.length
       ? await gerenciador.find(ParticipantePeladaEntity, {
@@ -959,9 +953,15 @@ export class PartidasService {
         })
       : [];
 
-    const disponiveis = participantes.filter(
-      (p) => p.status !== StatusParticipantePelada.DESCANSANDO,
-    );
+    const porId = new Map(participantes.map((p) => [p.id, p]));
+    // Percorre o elenco, e nao o resultado da consulta de participantes: e o
+    // elenco que esta ordenado.
+    const disponiveis = elenco
+      .map((membro) => porId.get(membro.participanteId))
+      .filter(
+        (p): p is ParticipantePeladaEntity =>
+          p !== undefined && p.status !== StatusParticipantePelada.DESCANSANDO,
+      );
     const fixos = disponiveis.filter((p) => p.ehGoleiroFixo);
     goleirosPorTime.set(
       time.id,
@@ -980,6 +980,24 @@ export class PartidasService {
           partidasJogadas: jogadasPorParticipante.get(p.id) ?? 0,
         })),
     };
+  }
+
+  /**
+   * Fim da fila interna do time — para quem entra sem herdar vaga de ninguem.
+   *
+   * Conta os inativos junto de proposito: reaproveitar o numero de alguem que
+   * ja saiu poria dois jogadores no mesmo lugar da fila quando o time voltasse.
+   */
+  private async proximaOrdemEntrada(
+    gerenciador: EntityManager,
+    timeId: string,
+  ): Promise<number> {
+    const { maximo } = (await gerenciador
+      .createQueryBuilder(JogadorTimeEntity, 'membro')
+      .select('MAX(membro.ordem_entrada)', 'maximo')
+      .where('membro.time_id = :timeId', { timeId })
+      .getRawOne<{ maximo: number | null }>()) ?? { maximo: null };
+    return (maximo ?? -1) + 1;
   }
 
   /**
