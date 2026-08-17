@@ -370,4 +370,168 @@ describe('PainelService', () => {
       }),
     );
   });
+
+  /**
+   * Incidente real: o organizador tirou alguem da fila e a pessoa sumiu da
+   * tela. Ela continua PRESENTE — sem time, sem fila —, e o painel nao a
+   * devolvia em lista nenhuma. Reaparecia so dentro do sheet de editar a fila,
+   * embaixo de um divisor; fora dali a unica saida era tira-la da pelada de
+   * vez, so para poder readiciona-la.
+   */
+  describe('quem foi tirado da fila', () => {
+    const PARTIDA_EM_CURSO = {
+      id: PARTIDA,
+      peladaId: PELADA,
+      numero: 1,
+      status: StatusPartida.EM_ANDAMENTO,
+      timeCasaId: CASA,
+      timeVisitanteId: VISITANTE,
+      golsCasa: 0,
+      golsVisitante: 0,
+      goleiroCasaId: null,
+      goleiroVisitanteId: null,
+    };
+
+    function montarServico({
+      participantes,
+      fila = [],
+      elencos = [],
+      partida = PARTIDA_EM_CURSO as unknown,
+    }: {
+      participantes: unknown[];
+      fila?: unknown[];
+      elencos?: unknown[];
+      partida?: unknown;
+    }) {
+      return new PainelService(
+        {
+          findOne: jest.fn().mockResolvedValue({
+            id: PELADA,
+            nome: 'Pelada',
+            status: StatusPelada.EM_ANDAMENTO,
+            local: null,
+            configuracao: {
+              jogadoresLinhaPorTime: 1,
+              duracaoPartidaMinutos: 10,
+              maximoGols: null,
+              permiteEmpate: true,
+              regraEmpate: RegraEmpate.AMBOS_SAEM,
+            },
+          }),
+        } as never,
+        { findOne: jest.fn().mockResolvedValue(partida) } as never,
+        {
+          find: jest.fn().mockResolvedValue([
+            { id: CASA, nome: 'Casa', cor: null, vitoriasConsecutivas: 0 },
+            {
+              id: VISITANTE,
+              nome: 'Visitante',
+              cor: null,
+              vitoriasConsecutivas: 0,
+            },
+          ]),
+        } as never,
+        { find: jest.fn().mockResolvedValue(elencos) } as never,
+        { find: jest.fn().mockResolvedValue(participantes) } as never,
+        { find: jest.fn().mockResolvedValue(fila) } as never,
+        { find: jest.fn().mockResolvedValue([]) } as never,
+        {
+          createQueryBuilder: jest.fn().mockReturnValue({
+            innerJoin: jest.fn().mockReturnThis(),
+            where: jest.fn().mockReturnThis(),
+            select: jest.fn().mockReturnThis(),
+            addSelect: jest.fn().mockReturnThis(),
+            groupBy: jest.fn().mockReturnThis(),
+            getRawMany: jest.fn().mockResolvedValue([]),
+          }),
+        } as never,
+      );
+    }
+
+    const presente = (id: string, nome: string, extra = {}) => ({
+      id,
+      status: StatusParticipantePelada.PRESENTE,
+      ordemChegada: 1,
+      ehGoleiroFixo: false,
+      jogador: { nome, apelido: null },
+      ...extra,
+    });
+
+    it('continua visivel para ser posto na fila de novo', async () => {
+      const servico = montarServico({
+        participantes: [
+          presente('tirado-da-fila', 'Ana'),
+          presente('na-fila', 'Bia'),
+        ],
+        fila: [
+          { peladaId: PELADA, participanteId: 'na-fila', posicao: 1, ativo: true },
+        ],
+      });
+
+      const resultado = await servico.montar(DONO, PELADA);
+
+      expect(resultado.foraDaFila).toEqual([
+        expect.objectContaining({ participanteId: 'tirado-da-fila' }),
+      ]);
+    });
+
+    it('nao repete quem esta na fila nem quem esta em campo', async () => {
+      const servico = montarServico({
+        participantes: [presente('em-campo', 'Ana'), presente('na-fila', 'Bia')],
+        fila: [
+          { peladaId: PELADA, participanteId: 'na-fila', posicao: 1, ativo: true },
+        ],
+        elencos: [{ timeId: CASA, participanteId: 'em-campo', ehGoleiro: false }],
+      });
+
+      const resultado = await servico.montar(DONO, PELADA);
+
+      expect(resultado.foraDaFila).toEqual([]);
+    });
+
+    /**
+     * Antes do sorteio nao ha time nem fila, entao todo participante se
+     * encaixaria na descricao de "fora" — e a pelada inteira apareceria em
+     * "Fora por agora" antes de comecar. Quem ainda nao foi sorteado nao esta
+     * de fora de nada: esta esperando comecar.
+     */
+    it('nao lista ninguem antes do sorteio', async () => {
+      const servico = montarServico({
+        participantes: [presente('a', 'Ana'), presente('b', 'Bia')],
+        partida: null,
+      });
+
+      const resultado = await servico.montar(DONO, PELADA);
+
+      expect(resultado.foraDaFila).toEqual([]);
+    });
+
+    // O servidor recusa goleiro fixo na fila. Oferecer o botao seria prometer
+    // o que a proxima tela nega.
+    it('deixa o goleiro fixo de fora', async () => {
+      const servico = montarServico({
+        participantes: [presente('goleiro', 'Ana', { ehGoleiroFixo: true })],
+      });
+
+      const resultado = await servico.montar(DONO, PELADA);
+
+      expect(resultado.foraDaFila).toEqual([]);
+    });
+
+    // Quem desistiu sai da pelada; ele volta pela tela de chegada, nao por um
+    // botao de fila que o servidor recusaria.
+    it('deixa quem desistiu de fora', async () => {
+      const servico = montarServico({
+        participantes: [
+          presente('saiu', 'Ana', {
+            status: StatusParticipantePelada.DESISTIU,
+          }),
+        ],
+      });
+
+      const resultado = await servico.montar(DONO, PELADA);
+
+      expect(resultado.foraDaFila).toEqual([]);
+    });
+  });
 });

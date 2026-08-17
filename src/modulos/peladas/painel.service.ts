@@ -159,6 +159,7 @@ export class PainelService {
       where: { peladaId, ativo: true },
       order: { posicao: 'ASC' },
     });
+    const idsNaFila = new Set(registrosFila.map((f) => f.participanteId));
 
     return {
       pelada: {
@@ -192,6 +193,32 @@ export class PainelService {
             !idsNosTimes.has(p.id),
         )
         .map((p) => this.mapearJogador(p, false, false)),
+      // A mesma regra da lista acima, para quem caia no buraco que ela nao
+      // cobria: tirado da fila a mao, o participante continua PRESENTE, sem
+      // time e sem fila. Ele sumia do painel inteiro e so reaparecia dentro do
+      // sheet de editar a fila, embaixo de um divisor — que ninguem acha
+      // quando esta procurando a pessoa. Fora do painel a unica saida era
+      // tira-lo da pelada de vez, so para poder readiciona-lo.
+      //
+      // Goleiro fixo fica de fora porque ele nunca entra na fila: aparecer
+      // aqui com um botao de "por na fila" seria oferecer o que o servidor
+      // recusa.
+      //
+      // So faz sentido depois que a pelada comecou a rodar. Antes do sorteio
+      // nao ha time nem fila, entao *todo mundo* se encaixaria na descricao e
+      // a pelada inteira apareceria como "fora" — quem ainda nao foi sorteado
+      // nao esta de fora de nada, esta esperando comecar.
+      foraDaFila: partidaDeReferencia
+        ? participantes
+            .filter(
+              (p) =>
+                p.status === StatusParticipantePelada.PRESENTE &&
+                !p.ehGoleiroFixo &&
+                !idsNosTimes.has(p.id) &&
+                !idsNaFila.has(p.id),
+            )
+            .map((p) => this.mapearJogador(p, false, false))
+        : [],
       eventosRecentes: eventos.map((e) => ({
         id: e.id,
         tipo: e.tipo,
