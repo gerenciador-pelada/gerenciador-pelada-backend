@@ -66,7 +66,7 @@ export function lerConfiguracaoJwt(): ConfiguracaoJwt {
     }
   }
 
-  return { segredo, expiracao: process.env.JWT_EXPIRACAO ?? '7d' };
+  return { segredo, expiracao: process.env.JWT_EXPIRACAO ?? '30d' };
 }
 
 /**
